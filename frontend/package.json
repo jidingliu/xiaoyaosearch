@@ -1,0 +1,108 @@
+{
+  "name": "xiaoyao-search-frontend",
+  "version": "0.1.0",
+  "description": "小遥搜索前端应用",
+  "main": "dist/main.js",
+  "homepage": "./",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
+    "dev:renderer": "vite",
+    "dev:main": "tsc -p tsconfig.main.json && electron dist/main.js --dev",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "start": "electron dist/main.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css,md}\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.18.0",
+    "antd": "^5.11.0",
+    "zustand": "^4.4.6",
+    "@tanstack/react-query": "^5.8.4",
+    "axios": "^1.6.0",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.4",
+    "electron-log": "^5.0.1",
+    "@ant-design/icons": "^5.2.6",
+    "dayjs": "^1.11.10",
+    "classnames": "^2.3.2",
+    "lodash-es": "^4.17.21",
+    "react-beautiful-dnd": "^13.1.1",
+    "react-markdown": "^9.0.1",
+    "react-syntax-highlighter": "^15.5.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@types/node": "^20.9.0",
+    "@types/lodash-es": "^4.17.12",
+    "@types/uuid": "^9.0.7",
+    "@types/react-beautiful-dnd": "^13.1.6",
+    "@types/react-syntax-highlighter": "^15.5.10",
+    "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "@typescript-eslint/parser": "^6.11.0",
+    "@vitejs/plugin-react": "^4.1.1",
+    "electron": "^27.1.0",
+    "electron-builder": "^24.6.4",
+    "eslint": "^8.54.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "prettier": "^3.1.0",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "vite-plugin-electron": "^0.15.4",
+    "vitest": "^0.34.6",
+    "@vitest/ui": "^0.34.6",
+    "concurrently": "^8.2.2"
+  },
+  "build": {
+    "appId": "com.xiaoyaosearch.app",
+    "productName": "小遥搜索",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "language": "2052"
+    }
+  }
+}

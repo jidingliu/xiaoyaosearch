@@ -1,0 +1,55 @@
+# Git attributes for 小遥搜索项目
+
+# Normalize line endings for text files
+* text=auto eol=lf
+
+# Source code
+*.js text eol=lf
+*.ts text eol=lf
+*.jsx text eol=lf
+*.tsx text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+
+# Configuration files
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+# Large files - Git LFS
+*.ai filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.avi filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
+
+# Generated files
+dist/** linguist-generated
+build/** linguist-generated
+node_modules/** linguist-generated
+__pycache__/** linguist-generated
+*.pyc linguist-generated
+*.pyo linguist-generated
+*.pyd linguist-generated
+.coverage linguist-generated
+.venv linguist-generated
+venv linguist-generated
+.env linguist-generated
