@@ -152,3 +152,6 @@ test-results/
 coverage.xml
 *.cover
 .pytest_cache/
+
+# Release files
+release/

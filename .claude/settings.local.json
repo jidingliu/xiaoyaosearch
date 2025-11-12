@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openspec:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
