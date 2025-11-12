@@ -1,31 +1,21 @@
 import React, { useState } from 'react'
 import {
-  Input,
   Card,
-  List,
   Typography,
-  Tag,
-  Space,
-  Divider,
-  Empty,
-  Spin
+  message
 } from 'antd'
-import {
-  SearchOutlined,
-  FileTextOutlined,
-  ClockCircleOutlined,
-  EyeOutlined
-} from '@ant-design/icons'
 
-const { Search } = Input
-const { Title, Text, Paragraph } = Typography
+import SearchInput from '@/renderer/components/Common/SearchInput'
+import SearchResultsList, { SearchResultItem } from '@/renderer/components/Common/SearchResultsList'
+
+const { Title } = Typography
 
 const SearchPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([])
 
-  const handleSearch = async (value: string) => {
+  const handleSearch = async (value: string, options?: any) => {
     if (!value.trim()) return
 
     setLoading(true)
@@ -36,7 +26,7 @@ const SearchPage: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000))
 
       // 模拟搜索结果
-      const mockResults = [
+      const mockResults: SearchResultItem[] = [
         {
           id: '1',
           title: '产品设计方案.docx',
@@ -46,7 +36,9 @@ const SearchPage: React.FC = () => {
           file_type: 'docx',
           score: 0.95,
           summary: '这是一个关于产品设计方案的文档，包含了产品的功能设计、界面设计和用户体验设计...',
-          highlights: ['产品设计', '用户体验']
+          highlights: ['产品设计', '用户体验'],
+          preview_available: true,
+          tags: ['设计', '产品', 'UI/UX']
         },
         {
           id: '2',
@@ -57,224 +49,95 @@ const SearchPage: React.FC = () => {
           file_type: 'pdf',
           score: 0.87,
           summary: '详细的技术规格说明文档，包括系统架构、技术选型和实现细节...',
-          highlights: ['技术规格', '系统架构']
+          highlights: ['技术规格', '系统架构'],
+          preview_available: true,
+          tags: ['技术', '架构', '文档']
+        },
+        {
+          id: '3',
+          'title': '市场分析报告.xlsx',
+          'path': '/Users/用户/Downloads/市场分析报告.xlsx',
+          'size': 1572864,
+          'modified_time': '2024-11-10',
+          'file_type': 'xlsx',
+          'score': 0.82,
+          'summary': '包含市场调研数据、竞品分析和未来市场趋势预测的详细报告...',
+          'highlights': ['市场分析', '竞品分析'],
+          'preview_available': false,
+          'tags': ['市场', '分析', '数据']
         }
       ]
 
       setSearchResults(mockResults)
     } catch (error) {
       console.error('搜索失败:', error)
+      message.error('搜索失败，请重试')
     } finally {
       setLoading(false)
     }
   }
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  const handlePreview = (item: SearchResultItem) => {
+    message.info(`预览文件: ${item.title}`)
   }
 
-  const getFileIcon = (fileType: string) => {
-    const iconMap: Record<string, React.ReactNode> = {
-      'pdf': <FileTextOutlined style={{ color: '#ff4d4f' }} />,
-      'docx': <FileTextOutlined style={{ color: '#1890ff' }} />,
-      'xlsx': <FileTextOutlined style={{ color: '#52c41a' }} />,
-      'pptx': <FileTextOutlined style={{ color: '#fa8c16' }} />,
-      'txt': <FileTextOutlined style={{ color: '#722ed1' }} />,
-      'md': <FileTextOutlined style={{ color: '#13c2c2' }} />
-    }
-    return iconMap[fileType] || <FileTextOutlined />
+  const handleOpen = (item: SearchResultItem) => {
+    message.info(`打开文件: ${item.title}`)
+  }
+
+  const handleDownload = (item: SearchResultItem) => {
+    message.info(`下载文件: ${item.title}`)
+  }
+
+  const handleShare = (item: SearchResultItem) => {
+    message.info(`分享文件: ${item.title}`)
+  }
+
+  const handleFavoriteToggle = (item: SearchResultItem) => {
+    const updatedResults = searchResults.map(result =>
+      result.id === item.id
+        ? { ...result, is_favorite: !result.is_favorite }
+        : result
+    )
+    setSearchResults(updatedResults)
+    message.success(item.is_favorite ? '已取消收藏' : '已添加到收藏')
   }
 
   return (
-    <div className="search-page">
+    <div className="search-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       {/* 搜索区域 */}
-      <Card className="search-card" style={{ marginBottom: 24 }}>
-        <div className="search-container">
-          <Title level={2} style={{ textAlign: 'center', marginBottom: 32 }}>
+      <Card style={{ marginBottom: 24 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <Title level={2}>
             智能文件搜索
           </Title>
-
-          <Search
-            placeholder="输入搜索关键词，支持语义搜索..."
-            allowClear
-            enterButton={
-              <Button type="primary" icon={<SearchOutlined />}>
-                搜索
-              </Button>
-            }
-            size="large"
-            onSearch={handleSearch}
-            loading={loading}
-            style={{ marginBottom: 16 }}
-          />
-
-          <div className="search-tips">
-            <Text type="secondary">
-              💡 提示：您可以使用自然语言搜索，如"上周的产品设计PPT"、"关于AI的技术文档"等
-            </Text>
-          </div>
         </div>
+
+        <SearchInput
+          placeholder="输入搜索关键词，支持语义搜索..."
+          loading={loading}
+          onSearch={handleSearch}
+          suggestions={[]}
+          showVoiceInput={true}
+          showAdvancedOptions={true}
+          size="large"
+        />
       </Card>
 
       {/* 搜索结果区域 */}
-      <Card
-        className="results-card"
-        title={
-          searchQuery ? (
-            <Space>
-              <span>搜索结果</span>
-              <Text type="secondary">({searchResults.length}个文件)</Text>
-            </Space>
-          ) : (
-            '搜索结果'
-          )
-        }
-      >
-        {loading ? (
-          <div className="loading-container">
-            <Spin size="large" />
-            <Text style={{ marginLeft: 16 }}>正在搜索中...</Text>
-          </div>
-        ) : searchResults.length > 0 ? (
-          <List
-            dataSource={searchResults}
-            renderItem={(item) => (
-              <List.Item
-                key={item.id}
-                className="search-result-item"
-                style={{ padding: '16px 0' }}
-              >
-                <Card
-                  size="small"
-                  className="search-result-card"
-                  hoverable
-                  style={{ width: '100%' }}
-                  actions={[
-                    <EyeOutlined key="preview" title="预览" />,
-                    <span key="more">...</span>
-                  ]}
-                >
-                  <div className="result-header">
-                    <Space>
-                      {getFileIcon(item.file_type)}
-                      <Title level={5} style={{ margin: 0 }}>
-                        {item.title}
-                      </Title>
-                      <Tag color="blue">{item.file_type.toUpperCase()}</Tag>
-                    </Space>
-
-                    <Space>
-                      <Text type="secondary">
-                        {formatFileSize(item.size)}
-                      </Text>
-                      <Text type="secondary">
-                        <ClockCircleOutlined /> {item.modified_time}
-                      </Text>
-                    </Space>
-                  </div>
-
-                  <Divider style={{ margin: '12px 0' }} />
-
-                  <div className="result-content">
-                    <Paragraph
-                      ellipsis={{ rows: 2, expandable: true }}
-                      style={{ marginBottom: 8 }}
-                    >
-                      {item.summary}
-                    </Paragraph>
-
-                    {item.highlights.length > 0 && (
-                      <div className="result-highlights">
-                        <Text strong>关键词：</Text>
-                        {item.highlights.map((highlight: string, index: number) => (
-                          <Tag key={index} color="orange" style={{ margin: '2px 4px 2px 0' }}>
-                            {highlight}
-                          </Tag>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="result-path">
-                      <Text type="secondary" code>
-                        {item.path}
-                      </Text>
-                    </div>
-                  </div>
-                </Card>
-              </List.Item>
-            )}
-          />
-        ) : searchQuery ? (
-          <Empty
-            description="未找到相关文件"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
-        ) : (
-          <Empty
-            description="请输入搜索关键词"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
-        )}
-      </Card>
-
-      <style jsx>{`
-        .search-page {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .search-card {
-          text-align: center;
-        }
-
-        .search-container {
-          max-width: 800px;
-          margin: 0 auto;
-        }
-
-        .search-tips {
-          margin-top: 16px;
-          text-align: left;
-        }
-
-        .loading-container {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 60px 0;
-        }
-
-        .search-result-item {
-          padding: 0 !important;
-        }
-
-        .search-result-card {
-          transition: all 0.2s ease;
-        }
-
-        .search-result-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-        }
-
-        .result-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-        }
-
-        .result-highlights {
-          margin-top: 8px;
-        }
-
-        .result-path {
-          margin-top: 8px;
-        }
-      `}</style>
+      <SearchResultsList
+        results={searchResults}
+        loading={loading}
+        query={searchQuery}
+        onPreview={handlePreview}
+        onOpen={handleOpen}
+        onDownload={handleDownload}
+        onShare={handleShare}
+        onFavoriteToggle={handleFavoriteToggle}
+        showPagination={true}
+        showSelection={true}
+        showActions={true}
+      />
     </div>
   )
 }
