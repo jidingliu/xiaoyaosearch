@@ -510,6 +510,200 @@ POST /settings/import
 }
 ```
 
+### 数据库管理模块
+
+#### 数据库健康检查
+```http
+GET /database/health
+```
+
+**描述**: 检查数据库连接健康状态
+
+**响应示例**:
+```json
+{
+  "status": "healthy",
+  "message": "数据库连接正常",
+  "timestamp": "2024-11-10T10:30:00Z"
+}
+```
+
+#### 获取数据库信息
+```http
+GET /database/info
+```
+
+**描述**: 获取数据库详细信息和统计
+
+**响应示例**:
+```json
+{
+  "database_type": "SQLite",
+  "database_path": "/path/to/xiaoyao_search.db",
+  "file_size_bytes": 1048576,
+  "file_size_mb": 1.0,
+  "tables_count": 7,
+  "connection_pool": {
+    "pool_size": "StaticPool",
+    "checked_out": "N/A"
+  }
+}
+```
+
+#### 创建数据库备份
+```http
+POST /database/backup?backup_dir={path}
+```
+
+**查询参数**:
+- `backup_dir` (string, 可选): 备份目录路径
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "数据库备份创建成功",
+  "backup_path": "/path/to/data/backups/xiaoyao_search.db.backup_20241110_103000"
+}
+```
+
+#### 列出备份文件
+```http
+GET /database/backups?backup_dir={path}
+```
+
+**查询参数**:
+- `backup_dir` (string, 可选): 备份目录路径
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "backups": [
+    {
+      "filename": "xiaoyao_search.db.backup_20241110_103000",
+      "path": "/path/to/data/backups/xiaoyao_search.db.backup_20241110_103000",
+      "size_bytes": 1048576,
+      "size_mb": 1.0,
+      "created_at": "2024-11-10T10:30:00Z",
+      "modified_at": "2024-11-10T10:30:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### 恢复数据库
+```http
+POST /database/restore
+```
+
+**请求体**:
+```json
+{
+  "backup_path": "/path/to/data/backups/xiaoyao_search.db.backup_20241110_103000"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "数据库已从 /path/to/data/backups/xiaoyao_search.db.backup_20241110_103000 恢复成功"
+}
+```
+
+#### 清理旧备份
+```http
+DELETE /database/backups/cleanup?keep_count={count}&backup_dir={path}
+```
+
+**查询参数**:
+- `keep_count` (integer, 必需): 保留的备份数量，默认5
+- `backup_dir` (string, 可选): 备份目录路径
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "旧备份清理完成，保留了最新的 5 个备份",
+  "deleted_count": 2
+}
+```
+
+#### 清理数据库碎片
+```http
+POST /database/vacuum
+```
+
+**描述**: 执行VACUUM命令清理数据库碎片，优化数据库文件大小
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "数据库清理完成",
+  "operation": "VACUUM"
+}
+```
+
+#### 分析数据库统计
+```http
+POST /database/analyze
+```
+
+**描述**: 执行ANALYZE命令更新数据库统计信息，优化查询性能
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "数据库分析完成，查询优化信息已更新",
+  "operation": "ANALYZE"
+}
+```
+
+#### 获取数据库统计信息
+```http
+GET /database/stats
+```
+
+**描述**: 获取详细的数据库统计信息
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "stats": {
+    "tables": {
+      "users": 1,
+      "files": 150,
+      "directories": 5,
+      "search_history": 45,
+      "favorites": 12,
+      "settings": 20,
+      "index_status": 1
+    },
+    "total_records": 234,
+    "table_count": 7,
+    "database_size_bytes": 2097152,
+    "database_size_mb": 2.0,
+    "users_count": 1,
+    "files_count": 150,
+    "directories_count": 5,
+    "search_history_count": 45,
+    "file_types": {
+      "pdf": 80,
+      "docx": 30,
+      "txt": 20,
+      "md": 15,
+      "pptx": 5
+    }
+  },
+  "timestamp": "2024-11-10T10:30:00Z"
+}
+```
+
 ## 健康检查
 
 #### 根路径

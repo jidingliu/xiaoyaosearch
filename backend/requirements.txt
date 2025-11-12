@@ -70,6 +70,7 @@ ruff==0.1.6
 # 安全
 cryptography==41.0.7
 passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
 
 # 工具库
 click==8.1.7

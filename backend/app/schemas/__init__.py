@@ -5,8 +5,15 @@ Pydantic模式包
 from .search import SearchRequest, SearchResponse, SearchResult
 from .file import FileInfo, FilePreview
 from .directory import DirectoryInfo, DirectoryCreate
-from .user import UserCreate, UserResponse
-from .settings import SettingsUpdate
+from .user import (
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+    UserLogin,
+    UserToken,
+    UserAuth,
+    UserBase
+)
 
 __all__ = [
     "SearchRequest",
@@ -18,5 +25,9 @@ __all__ = [
     "DirectoryCreate",
     "UserCreate",
     "UserResponse",
-    "SettingsUpdate"
+    "UserUpdate",
+    "UserLogin",
+    "UserToken",
+    "UserAuth",
+    "UserBase"
 ]

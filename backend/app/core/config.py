@@ -5,7 +5,8 @@
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import BaseSettings, validator
+from pydantic import validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -23,6 +24,17 @@ class Settings(BaseSettings):
 
     # 数据库设置
     DATABASE_URL: str = "sqlite:///./xiaoyao_search.db"
+
+    # 数据库连接池设置
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 3600
+    DB_ECHO: bool = False
+
+    # SQLite特定设置
+    SQLITE_TIMEOUT: int = 30
+    SQLITE_ISOLATION_LEVEL: str = "IMMEDIATE"
 
     # 安全设置
     SECRET_KEY: str = "your-secret-key-change-in-production"

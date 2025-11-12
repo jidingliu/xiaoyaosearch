@@ -513,12 +513,133 @@ CREATE INDEX idx_settings_key ON settings(key);
 }
 ```
 
+## 数据库连接池管理
+
+### 连接池配置
+小遥搜索实现了智能的数据库连接池管理，支持多种数据库类型：
+
+#### SQLite 连接池
+```python
+# SQLite特定配置
+engine_kwargs = {
+    "connect_args": {
+        "check_same_thread": False,
+        "timeout": 30,  # 连接超时
+        "isolation_level": "IMMEDIATE",  # 事务隔离级别
+    },
+    "poolclass": StaticPool,  # 静态连接池
+    "pool_pre_ping": True,  # 连接健康检查
+}
+```
+
+#### 其他数据库连接池
+```python
+# PostgreSQL/MySQL等连接池配置
+engine_kwargs = {
+    "poolclass": QueuePool,
+    "pool_size": 10,  # 连接池大小
+    "max_overflow": 20,  # 最大溢出连接数
+    "pool_timeout": 30,  # 获取连接超时
+    "pool_recycle": 3600,  # 连接回收时间
+    "pool_pre_ping": True,  # 连接健康检查
+}
+```
+
+### SQLite 性能优化
+通过事件监听器自动优化SQLite性能：
+```sql
+-- 启用WAL模式提高并发性能
+PRAGMA journal_mode=WAL;
+
+-- 启用外键约束
+PRAGMA foreign_keys=ON;
+
+-- 优化SQLite性能
+PRAGMA synchronous=NORMAL;
+PRAGMA cache_size=10000;
+PRAGMA temp_store=MEMORY;
+PRAGMA mmap_size=268435456;  -- 256MB内存映射
+```
+
+### 连接监控
+- **连接检出/检入日志**: 自动记录数据库连接的获取和释放
+- **连接健康检查**: 使用 `pool_pre_ping` 自动检测连接有效性
+- **连接状态统计**: 实时监控连接池的使用情况
+
+## 数据库备份与恢复
+
+### 自动备份机制
+实现了完整的数据库备份和恢复功能，支持数据安全保障：
+
+#### 备份策略
+- **时间戳命名**: 备份文件包含创建时间戳，避免覆盖
+- **目录管理**: 自动创建备份目录，支持自定义备份路径
+- **文件验证**: 备份完成后验证备份文件完整性
+
+#### 备份实现
+```python
+def backup_database(backup_dir: Optional[str] = None) -> str:
+    """创建数据库备份"""
+    # 生成备份文件名
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"{db_filename}.backup_{timestamp}"
+
+    # 执行备份
+    shutil.copy2(db_path, backup_path)
+
+    return backup_path
+```
+
+#### 安全恢复机制
+```python
+def restore_database(backup_path: str) -> None:
+    """安全恢复数据库"""
+    # 1. 验证备份文件存在
+    # 2. 创建当前数据库备份（防止恢复失败）
+    # 3. 执行恢复操作
+    # 4. 失败时自动回滚
+```
+
+### 备份管理功能
+- **备份列表**: 按时间排序显示所有备份文件
+- **备份统计**: 显示备份文件大小、创建时间等信息
+- **自动清理**: 支持保留指定数量的最新备份，自动清理旧备份
+- **批量管理**: 支持批量备份和恢复操作
+
+### CLI 管理工具
+提供了完整的命令行管理接口：
+```bash
+# 数据库健康检查
+python database_cli.py health
+
+# 创建备份
+python database_cli.py backup
+
+# 列出备份
+python database_cli.py list
+
+# 恢复数据库
+python database_cli.py restore /path/to/backup.db
+
+# 清理旧备份
+python database_cli.py cleanup --keep 5
+```
+
+### API 管理接口
+完整的RESTful API支持远程数据库管理：
+- `GET /database/health` - 数据库健康检查
+- `POST /database/backup` - 创建数据库备份
+- `GET /database/backups` - 列出备份文件
+- `POST /database/restore` - 恢复数据库
+- `DELETE /database/backups/cleanup` - 清理旧备份
+
 ## 性能优化策略
 
 ### 1. 数据库优化
-- **连接池**: 使用 SQLAlchemy 连接池管理连接
+- **连接池**: 使用 SQLAlchemy 连接池管理连接，支持自动健康检查
 - **批量操作**: 批量插入和更新减少数据库I/O
 - **索引优化**: 根据查询模式优化索引策略
+- **连接监控**: 实时监控连接池状态和性能指标
 
 ### 2. 索引优化
 - **增量更新**: 支持增量索引更新，避免全量重建

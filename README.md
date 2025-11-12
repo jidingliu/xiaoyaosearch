@@ -107,6 +107,67 @@ xiaoyaosearch/
 - **后端**: Black + mypy
 - **Git hooks**: pre-commit hooks
 
+### 数据库管理
+
+小遥搜索提供了完整的数据库管理功能，支持备份、恢复、健康检查等操作。
+
+#### CLI 工具
+
+```bash
+# 进入后端目录
+cd backend
+
+# 数据库健康检查
+python database_cli.py health
+
+# 创建数据库备份
+python database_cli.py backup
+
+# 指定备份目录
+python database_cli.py backup -d /path/to/backups
+
+# 列出所有备份
+python database_cli.py list
+
+# 恢复数据库
+python database_cli.py restore /path/to/backup.db
+
+# 清理旧备份，保留5个
+python database_cli.py cleanup --keep 5
+
+# 显示数据库信息
+python database_cli.py info
+
+# 初始化数据库
+python database_cli.py init
+
+# 删除数据库（危险操作）
+python database_cli.py drop
+```
+
+#### API 接口
+
+数据库管理还提供了RESTful API接口：
+
+- `GET /api/v1/database/health` - 数据库健康检查
+- `GET /api/v1/database/info` - 获取数据库信息
+- `POST /api/v1/database/backup` - 创建数据库备份
+- `GET /api/v1/database/backups` - 列出备份文件
+- `POST /api/v1/database/restore` - 恢复数据库
+- `DELETE /api/v1/database/backups/cleanup` - 清理旧备份
+- `POST /api/v1/database/vacuum` - 清理数据库碎片
+- `POST /api/v1/database/analyze` - 分析数据库统计
+- `GET /api/v1/database/stats` - 获取数据库统计信息
+
+#### 备份策略
+
+建议采用以下备份策略：
+
+1. **定期备份**: 每天自动创建备份
+2. **保留策略**: 保留最近7天的备份
+3. **异地备份**: 重要数据建议备份到外部存储
+4. **备份验证**: 定期验证备份文件完整性
+
 ### 测试
 
 ```bash
@@ -118,6 +179,10 @@ npm run test:frontend
 
 # 运行后端测试
 npm run test:backend
+
+# 运行数据库管理测试
+cd backend
+python -m pytest tests/test_database_management.py -v
 ```
 
 ### 代码格式化
