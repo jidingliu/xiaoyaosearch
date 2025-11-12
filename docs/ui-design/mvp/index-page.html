@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>索引管理页面 - 小遥搜索 MVP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .progress-ring {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.35s;
+            stroke: #10b981;
+            stroke-dasharray: 339.292;
+            stroke-dashoffset: 339.292;
+        }
+        .directory-row {
+            transition: all 0.2s ease;
+        }
+        .directory-row:hover {
+            background-color: #f9fafb;
+            transform: translateX(4px);
+        }
+        .action-button {
+            transition: all 0.2s ease;
+        }
+        .action-button:hover {
+            transform: scale(1.05);
+        }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .indexing-active {
+            animation: pulse-green 2s infinite;
+        }
+        .status-badge {
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .progress-bar {
+            transition: width 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <a href="index.html" class="flex items-center">
+                        <i class="fas fa-search text-blue-600 text-2xl mr-3"></i>
+                        <h1 class="text-xl font-bold text-gray-800">小遥搜索</h1>
+                    </a>
+                    <span class="ml-3 px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">索引管理</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-blue-600 transition">
+                        <i class="fas fa-sync-alt text-lg"></i>
+                        <span class="ml-2 hidden sm:inline">刷新</span>
+                    </button>
+                    <button class="text-gray-600 hover:text-blue-600 transition">
+                        <i class="fas fa-cog text-lg"></i>
+                        <span class="ml-2 hidden sm:inline">设置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- 页面标题区域 -->
+        <section class="text-center mb-12">
+            <div class="inline-flex items-center justify-center mb-4">
+                <div class="gradient-bg text-white p-4 rounded-full">
+                    <i class="fas fa-database text-3xl"></i>
+                </div>
+            </div>
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">索引管理中心</h2>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                管理文件索引目录，监控索引进度，配置索引参数
+            </p>
+        </section>
+
+        <!-- 统计概览 -->
+        <section class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <!-- 总文件数 -->
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-file text-blue-600 text-xl"></i>
+                    </div>
+                    <span class="text-sm text-green-600 font-medium">+12.5%</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-1">15,842</h3>
+                <p class="text-gray-600 text-sm">总文件数</p>
+                <div class="mt-4 text-xs text-gray-500">比上周增加 1,753 个文件</div>
+            </div>
+
+            <!-- 已索引文件 -->
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                    </div>
+                    <span class="text-sm text-green-600 font-medium">98.2%</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-1">15,563</h3>
+                <p class="text-gray-600 text-sm">已索引文件</p>
+                <div class="mt-4">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-green-600 h-2 rounded-full" style="width: 98.2%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 索引目录数 -->
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-folder text-purple-600 text-xl"></i>
+                    </div>
+                    <span class="text-sm text-blue-600 font-medium">+2</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-1">24</h3>
+                <p class="text-gray-600 text-sm">索引目录</p>
+                <div class="mt-4 text-xs text-gray-500">覆盖 5 个主要磁盘分区</div>
+            </div>
+
+            <!-- 索引大小 -->
+            <div class="stat-card bg-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-hdd text-orange-600 text-xl"></i>
+                    </div>
+                    <span class="text-sm text-orange-600 font-medium">+156MB</span>
+                </div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-1">2.8 GB</h3>
+                <p class="text-gray-600 text-sm">索引大小</p>
+                <div class="mt-4 text-xs text-gray-500">占用原文件大小的 18.5%</div>
+            </div>
+        </section>
+
+        <!-- 全局控制面板 -->
+        <section class="bg-white rounded-xl shadow-lg p-8 mb-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">全局索引控制</h3>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-600">当前状态:</span>
+                    <span id="globalStatus" class="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full status-badge">
+                        <i class="fas fa-circle text-green-500 text-xs mr-2"></i>运行中
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- 索引状态 -->
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-700 mb-4">索引状态</h4>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                                    <i class="fas fa-play text-green-600"></i>
+                                </div>
+                                <div>
+                                    <div class="font-medium">索引运行状态</div>
+                                    <div class="text-sm text-gray-600">正在处理文件: /Documents/工作报告.docx</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-lg font-bold text-green-600">68%</div>
+                                <div class="text-sm text-gray-500">进度</div>
+                            </div>
+                        </div>
+
+                        <!-- 进度条 -->
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div class="progress-bar bg-green-600 h-3 rounded-full" style="width: 68%"></div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div class="p-3 bg-blue-50 rounded-lg">
+                                <div class="text-lg font-bold text-blue-600">142</div>
+                                <div class="text-sm text-gray-600">文件/分钟</div>
+                            </div>
+                            <div class="p-3 bg-purple-50 rounded-lg">
+                                <div class="text-lg font-bold text-purple-600">4.2GB</div>
+                                <div class="text-sm text-gray-600">已处理</div>
+                            </div>
+                            <div class="p-3 bg-orange-50 rounded-lg">
+                                <div class="text-lg font-bold text-orange-600">~15分钟</div>
+                                <div class="text-sm text-gray-600">剩余时间</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 控制按钮 -->
+                <div>
+                    <h4 class="text-lg font-semibold text-gray-700 mb-4">操作控制</h4>
+                    <div class="space-y-3">
+                        <button id="pauseBtn" class="w-full px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition action-button">
+                            <i class="fas fa-pause mr-3"></i>暂停索引
+                        </button>
+                        <button id="stopBtn" class="w-full px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition action-button">
+                            <i class="fas fa-stop mr-3"></i>停止索引
+                        </button>
+                        <button id="rebuildBtn" class="w-full px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition action-button">
+                            <i class="fas fa-redo mr-3"></i>重建索引
+                        </button>
+                        <button id="optimizeBtn" class="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition action-button">
+                            <i class="fas fa-magic mr-3"></i>优化索引
+                        </button>
+                    </div>
+
+                    <!-- 快速操作 -->
+                    <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                        <h5 class="font-medium text-blue-900 mb-2">快速操作</h5>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition">
+                                <i class="fas fa-plus mr-1"></i>添加目录
+                            </button>
+                            <button class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition">
+                                <i class="fas fa-sync mr-1"></i>增量更新
+                            </button>
+                            <button class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition">
+                                <i class="fas fa-chart-bar mr-1"></i>查看统计
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 目录管理表格 -->
+        <section class="bg-white rounded-xl shadow-lg p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">索引目录管理</h3>
+                <button id="addDirectoryBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    <i class="fas fa-plus mr-2"></i>添加目录
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700">
+                                <input type="checkbox" class="mr-2">
+                                目录路径
+                            </th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700">文件数量</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700">索引状态</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700">最后更新</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700">索引大小</th>
+                            <th class="text-center py-3 px-4 font-semibold text-gray-700">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- 目录行 1 -->
+                        <tr class="directory-row border-b border-gray-100">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center">
+                                    <input type="checkbox" class="mr-3">
+                                    <div class="w-8 h-8 bg-blue-100 rounded flex items-center justify-center mr-3">
+                                        <i class="fas fa-folder text-blue-600 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">Documents</div>
+                                        <div class="text-sm text-gray-500">C:\Users\用户\Documents</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">4,821</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                    <i class="fas fa-check-circle mr-1"></i>已索引
+                                </span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="text-sm text-gray-600">2024-11-12 14:30</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">856 MB</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="重新扫描">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                    <button class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="设置">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    <button class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- 目录行 2 -->
+                        <tr class="directory-row border-b border-gray-100">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center">
+                                    <input type="checkbox" class="mr-3">
+                                    <div class="w-8 h-8 bg-green-100 rounded flex items-center justify-center mr-3">
+                                        <i class="fas fa-folder text-green-600 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">Downloads</div>
+                                        <div class="text-sm text-gray-500">C:\Users\用户\Downloads</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">2,156</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full indexing-active">
+                                    <i class="fas fa-spinner fa-spin mr-1"></i>索引中
+                                </span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="text-sm text-gray-600">2024-11-12 14:45</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">342 MB</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button class="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition" title="暂停">
+                                        <i class="fas fa-pause"></i>
+                                    </button>
+                                    <button class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="设置">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    <button class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- 目录行 3 -->
+                        <tr class="directory-row border-b border-gray-100">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center">
+                                    <input type="checkbox" class="mr-3">
+                                    <div class="w-8 h-8 bg-purple-100 rounded flex items-center justify-center mr-3">
+                                        <i class="fas fa-folder text-purple-600 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">Pictures</div>
+                                        <div class="text-sm text-gray-500">C:\Users\用户\Pictures</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">6,843</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                    <i class="fas fa-check-circle mr-1"></i>已索引
+                                </span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="text-sm text-gray-600">2024-11-11 20:15</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">1.2 GB</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="重新扫描">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                    <button class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="设置">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    <button class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- 目录行 4 -->
+                        <tr class="directory-row border-b border-gray-100">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center">
+                                    <input type="checkbox" class="mr-3">
+                                    <div class="w-8 h-8 bg-red-100 rounded flex items-center justify-center mr-3">
+                                        <i class="fas fa-folder text-red-600 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">Videos</div>
+                                        <div class="text-sm text-gray-500">D:\Media\Videos</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">892</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>错误
+                                </span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="text-sm text-gray-600">2024-11-10 16:22</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">234 MB</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button class="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition" title="重试">
+                                        <i class="fas fa-redo"></i>
+                                    </button>
+                                    <button class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="查看日志">
+                                        <i class="fas fa-file-alt"></i>
+                                    </button>
+                                    <button class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- 目录行 5 -->
+                        <tr class="directory-row">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center">
+                                    <input type="checkbox" class="mr-3">
+                                    <div class="w-8 h-8 bg-orange-100 rounded flex items-center justify-center mr-3">
+                                        <i class="fas fa-folder text-orange-600 text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-gray-800">Projects</div>
+                                        <div class="text-sm text-gray-500">D:\Work\Projects</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">1,130</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
+                                    <i class="fas fa-clock mr-1"></i>等待中
+                                </span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="text-sm text-gray-600">-</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="font-medium">-</span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="开始索引">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button class="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" title="设置">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                    <button class="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="删除">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 批量操作 -->
+            <div class="mt-6 flex items-center justify-between">
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600">已选择 <span id="selectedCount">0</span> 个目录</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-sync-alt mr-2"></i>批量重新扫描
+                    </button>
+                    <button class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition">
+                        <i class="fas fa-cog mr-2"></i>批量设置
+                    </button>
+                    <button class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                        <i class="fas fa-trash mr-2"></i>批量删除
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 索引设置面板 -->
+        <section class="bg-white rounded-xl shadow-lg p-8 mt-8">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6">索引设置</h3>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 文件类型设置 -->
+                <div class="p-6 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-file-alt text-blue-600 mr-2"></i>
+                        文件类型
+                    </h4>
+                    <div class="space-y-3">
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="mr-2 h-4 w-4 text-blue-600 rounded">
+                            <span class="text-sm">文档文件 (.doc, .pdf, .txt)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="mr-2 h-4 w-4 text-blue-600 rounded">
+                            <span class="text-sm">图片文件 (.jpg, .png, .gif)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="mr-2 h-4 w-4 text-blue-600 rounded">
+                            <span class="text-sm">视频文件 (.mp4, .avi, .mov)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="mr-2 h-4 w-4 text-blue-600 rounded">
+                            <span class="text-sm">音频文件 (.mp3, .wav, .flac)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="mr-2 h-4 w-4 text-blue-600 rounded">
+                            <span class="text-sm">代码文件 (.js, .py, .java)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 索引频率设置 -->
+                <div class="p-6 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-clock text-green-600 mr-2"></i>
+                        更新频率
+                    </h4>
+                    <div class="space-y-3">
+                        <label class="flex items-center">
+                            <input type="radio" name="frequency" class="mr-2">
+                            <span class="text-sm">实时更新</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="frequency" checked class="mr-2">
+                            <span class="text-sm">每小时更新</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="frequency" class="mr-2">
+                            <span class="text-sm">每天更新</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="frequency" class="mr-2">
+                            <span class="text-sm">每周更新</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="frequency" class="mr-2">
+                            <span class="text-sm">手动更新</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 性能设置 -->
+                <div class="p-6 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-tachometer-alt text-purple-600 mr-2"></i>
+                        性能设置
+                    </h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm text-gray-700">索引线程数</label>
+                            <select class="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                <option>1 (低CPU使用)</option>
+                                <option selected>2 (平衡)</option>
+                                <option>4 (高性能)</option>
+                                <option>8 (最高性能)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-700">内存限制</label>
+                            <select class="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                <option>512 MB</option>
+                                <option selected>1 GB</option>
+                                <option>2 GB</option>
+                                <option>4 GB</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-700">文件大小限制</label>
+                            <select class="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                <option>10 MB</option>
+                                <option selected>50 MB</option>
+                                <option>100 MB</option>
+                                <option>无限制</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition mr-3">
+                    重置默认
+                </button>
+                <button class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                    保存设置
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-8 mt-16">
+        <div class="container mx-auto px-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas fa-database text-green-400 text-xl mr-3"></i>
+                    <span class="text-sm">小遥搜索 MVP - 索引管理页面</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="index.html" class="text-gray-400 hover:text-white transition">
+                        <i class="fas fa-home mr-2"></i>首页
+                    </a>
+                    <a href="search-page.html" class="text-gray-400 hover:text-white transition">
+                        <i class="fas fa-search mr-2"></i>搜索
+                    </a>
+                    <a href="components.html" class="text-gray-400 hover:text-white transition">
+                        <i class="fas fa-puzzle-piece mr-2"></i>组件
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // 全局状态管理
+        let globalStatus = 'running'; // running, paused, stopped
+        let selectedDirectories = new Set();
+
+        // 控制按钮事件
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            if (globalStatus === 'running') {
+                globalStatus = 'paused';
+                this.innerHTML = '<i class="fas fa-play mr-3"></i>继续索引';
+                this.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+                this.classList.add('bg-green-600', 'hover:bg-green-700');
+                updateGlobalStatus('paused');
+            } else if (globalStatus === 'paused') {
+                globalStatus = 'running';
+                this.innerHTML = '<i class="fas fa-pause mr-3"></i>暂停索引';
+                this.classList.remove('bg-green-600', 'hover:bg-green-700');
+                this.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+                updateGlobalStatus('running');
+            }
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', function() {
+            globalStatus = 'stopped';
+            updateGlobalStatus('stopped');
+            document.getElementById('pauseBtn').innerHTML = '<i class="fas fa-play mr-3"></i>开始索引';
+        });
+
+        document.getElementById('rebuildBtn').addEventListener('click', function() {
+            if (confirm('确定要重建所有索引吗？这可能需要较长时间。')) {
+                // 模拟重建索引
+                updateGlobalStatus('running');
+                animateProgress();
+            }
+        });
+
+        document.getElementById('optimizeBtn').addEventListener('click', function() {
+            // 模拟优化索引
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin mr-3"></i>优化中...';
+            setTimeout(() => {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-magic mr-3"></i>优化索引';
+                alert('索引优化完成！');
+            }, 3000);
+        });
+
+        // 更新全局状态
+        function updateGlobalStatus(status) {
+            const statusElement = document.getElementById('globalStatus');
+            const statusMap = {
+                'running': { text: '运行中', class: 'bg-green-100 text-green-800', icon: 'fa-circle text-green-500' },
+                'paused': { text: '已暂停', class: 'bg-yellow-100 text-yellow-800', icon: 'fa-pause-circle text-yellow-500' },
+                'stopped': { text: '已停止', class: 'bg-red-100 text-red-800', icon: 'fa-stop-circle text-red-500' }
+            };
+
+            const statusInfo = statusMap[status];
+            statusElement.className = `px-3 py-1 ${statusInfo.class} text-sm rounded-full status-badge`;
+            statusElement.innerHTML = `<i class="fas ${statusInfo.icon} text-xs mr-2"></i>${statusInfo.text}`;
+        }
+
+        // 进度动画
+        function animateProgress() {
+            let progress = 0;
+            const progressBar = document.querySelector('.progress-bar');
+            const interval = setInterval(() => {
+                progress += Math.random() * 2;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    updateGlobalStatus('completed');
+                }
+                progressBar.style.width = progress + '%';
+            }, 500);
+        }
+
+        // 目录选择
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:not([name="frequency"])');
+        const selectedCountElement = document.getElementById('selectedCount');
+
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    selectedDirectories.add(this);
+                } else {
+                    selectedDirectories.delete(this);
+                }
+                selectedCountElement.textContent = selectedDirectories.size;
+            });
+        });
+
+        // 添加目录按钮
+        document.getElementById('addDirectoryBtn').addEventListener('click', function() {
+            // 模拟目录选择
+            const directoryPath = prompt('请输入要添加的目录路径:');
+            if (directoryPath) {
+                alert(`目录 "${directoryPath}" 已添加到索引队列`);
+            }
+        });
+
+        // 目录行操作按钮
+        document.querySelectorAll('.directory-row button').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const action = this.getAttribute('title');
+                if (action === '删除') {
+                    if (confirm('确定要删除此目录的索引吗？')) {
+                        this.closest('tr').remove();
+                    }
+                } else if (action === '重新扫描') {
+                    const statusBadge = this.closest('tr').querySelector('.status-badge');
+                    statusBadge.className = 'px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full indexing-active';
+                    statusBadge.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>索引中';
+                } else if (action === '设置') {
+                    alert('打开目录设置面板');
+                } else if (action === '暂停') {
+                    this.innerHTML = '<i class="fas fa-play"></i>';
+                    this.setAttribute('title', '继续');
+                } else if (action === '继续') {
+                    this.innerHTML = '<i class="fas fa-pause"></i>';
+                    this.setAttribute('title', '暂停');
+                } else if (action === '重试') {
+                    const statusBadge = this.closest('tr').querySelector('.status-badge');
+                    statusBadge.className = 'px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full indexing-active';
+                    statusBadge.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>索引中';
+                } else if (action === '查看日志') {
+                    alert('打开错误日志面板');
+                } else if (action === '开始索引') {
+                    const statusBadge = this.closest('tr').querySelector('.status-badge');
+                    statusBadge.className = 'px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full indexing-active';
+                    statusBadge.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>索引中';
+                }
+            });
+        });
+
+        // 设置面板单选框事件
+        document.querySelectorAll('input[name="frequency"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                console.log('索引频率设置为:', this.nextElementSibling.textContent);
+            });
+        });
+
+        // 设置面板复选框事件
+        document.querySelectorAll('.p-6 input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                console.log('文件类型设置:', this.nextElementSibling.textContent, this.checked);
+            });
+        });
+
+        // 下拉菜单变化事件
+        document.querySelectorAll('select').forEach(select => {
+            select.addEventListener('change', function() {
+                console.log('设置变化:', this.previousElementSibling.textContent, this.value);
+            });
+        });
+
+        // 页面加载时启动进度动画
+        window.addEventListener('load', () => {
+            animateProgress();
+        });
+    </script>
+</body>
+</html>
