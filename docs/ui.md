@@ -13,10 +13,12 @@
 ## 技术栈
 
 ### 前端技术
-- **HTML5**：语义化标签，良好的可访问性
-- **Tailwind CSS**：现代化的CSS框架，快速样式开发
-- **JavaScript**：丰富的交互效果和用户逻辑
-- **Font Awesome**：完整的图标库支持
+- **Vue 3.4+**：现代化前端框架，组合式API
+- **TypeScript 5.3+**：类型安全的JavaScript超集
+- **Ant Design Vue**：企业级UI组件库，自动导入支持，完整类型定义
+- **Electron 28.0+**：跨平台桌面应用框架
+- **electron-vite**：优化的构建工具和开发体验
+- **Pinia**：Vue官方状态管理库
 
 ### 设计工具
 - **Figma/Sketch**：UI设计稿制作

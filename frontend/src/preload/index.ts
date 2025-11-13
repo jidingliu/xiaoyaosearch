@@ -1,44 +1,22 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import { ElectronAPI } from '@/shared/types'
+import { contextBridge } from 'electron'
+import { electronAPI } from '@electron-toolkit/preload'
 
-// 定义暴露给渲染进程的API
-const electronAPI: ElectronAPI = {
-  // 应用控制
-  app: {
-    getVersion: () => ipcRenderer.invoke('app:getVersion'),
-    quit: () => ipcRenderer.invoke('app:quit'),
-    minimize: () => ipcRenderer.invoke('app:minimize'),
-    maximize: () => ipcRenderer.invoke('app:maximize')
-  },
+// Custom APIs for renderer
+const api = {}
 
-  // 窗口控制
-  window: {
-    close: () => ipcRenderer.invoke('window:close')
-  },
-
-  // 配置存储
-  store: {
-    get: (key: string) => ipcRenderer.invoke('store:get', key),
-    set: (key: string, value: any) => ipcRenderer.invoke('store:set', key, value),
-    delete: (key: string) => ipcRenderer.invoke('store:delete', key)
-  },
-
-  // 文件对话框
-  dialog: {
-    showOpenDialog: (options: any) => ipcRenderer.invoke('dialog:showOpenDialog', options),
-    showSaveDialog: (options: any) => ipcRenderer.invoke('dialog:showSaveDialog', options)
-  },
-
-  // 事件监听
-  on: (channel: string, callback: Function) => {
-    ipcRenderer.on(channel, (_event, ...args) => callback(...args))
-  },
-
-  // 移除事件监听
-  off: (channel: string, callback: Function) => {
-    ipcRenderer.removeListener(channel, callback)
+// Use `contextBridge` APIs to expose Electron APIs to
+// renderer only if context isolation is enabled, otherwise
+// just add to the DOM global.
+if (process.contextIsolated) {
+  try {
+    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('api', api)
+  } catch (error) {
+    console.error(error)
   }
+} else {
+  // @ts-ignore (define in dts)
+  window.electron = electronAPI
+  // @ts-ignore (define in dts)
+  window.api = api
 }
-
-// 暴露API到渲染进程
-contextBridge.exposeInMainWorld('electronAPI', electronAPI)
