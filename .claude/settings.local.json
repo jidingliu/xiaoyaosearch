@@ -5,7 +5,10 @@
       "Bash(python -m py_compile:*)",
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:renderer:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
