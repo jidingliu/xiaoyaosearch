@@ -1,64 +1,19 @@
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.poetry]
+[project]
 name = "xiaoyaosearch"
 version = "0.1.0"
-description = "AI-driven desktop search application"
-authors = ["Xiaoyao Search Team"]
+description = "AI-driven desktop search application backend"
 readme = "README.md"
-license = "MIT"
-packages = [{include = "xiaoyaosearch", from = "backend"}]
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Xiaoyao Search Team"}
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-fastapi = "^0.104.1"
-uvicorn = {extras = ["standard"], version = "^0.24.0"}
-sqlalchemy = "^2.0.23"
-alembic = "^1.12.1"
-pydantic = "^2.5.0"
-python-multipart = "^0.0.6"
-websockets = "^12.0"
-aiofiles = "^23.2.1"
-python-jose = {extras = ["cryptography"], version = "^3.3.0"}
-passlib = {extras = ["bcrypt"], version = "^1.7.4"}
-python-dotenv = "^1.0.0"
-httpx = "^0.25.2"
-watchdog = "^3.0.0"
-pillow = "^10.1.0"
-faiss-cpu = "^1.7.4"
-whoosh = "^2.7.4"
-numpy = "^1.24.3"
-pandas = "^2.1.4"
-scikit-learn = "^1.3.2"
-sentence-transformers = "^2.2.2"
-torch = "^2.1.1"
-transformers = "^4.35.2"
-accelerate = "^0.24.1"
-openai = "^1.3.7"
-ollama = "^0.1.7"
-faster-whisper = "^0.9.0"
-paddlepaddle = "^2.5.2"
-paddleocr = "^2.7.3"
-opencv-python = "^4.8.1.78"
-libreoffice-python = "^0.1.0"
-pytesseract = "^0.3.10"
-pdf2image = "^1.17.0"
-marker-pdf = "^0.2.6"
-ffmpeg-python = "^0.2.0"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.3"
-pytest-asyncio = "^0.21.1"
-pytest-cov = "^4.1.0"
-black = "^23.11.0"
-isort = "^5.12.0"
-flake8 = "^6.1.0"
-mypy = "^1.7.1"
-pre-commit = "^3.5.0"
-httpx = "^0.25.2"
-
+# Development tools configuration
 [tool.black]
 line-length = 88
 target-version = ['py39']
@@ -109,6 +64,7 @@ module = [
     "ocr.*",
     "marker.*",
     "libreoffice.*",
+    "unoconv.*",
 ]
 ignore_missing_imports = true
 

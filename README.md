@@ -121,7 +121,13 @@ xiaoyaosearch/
 2. **安装后端依赖**
    ```bash
    cd backend
-   poetry install
+   # 自动设置环境（推荐）
+   python setup_env.py  # Windows可使用 setup.bat，Unix/Linux/macOS可使用 setup.sh
+   # 或手动设置
+   python -m venv venv
+   venv\Scripts\activate  # Windows
+   source venv/bin/activate  # Unix/Linux/macOS
+   pip install -r requirements.txt
    ```
 
 3. **安装前端依赖**
@@ -138,7 +144,9 @@ xiaoyaosearch/
 5. **启动后端服务**
    ```bash
    cd backend
-   poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   venv\Scripts\activate  # Windows
+   source venv/bin/activate  # Unix/Linux/macOS
+   uvicorn main:app --reload --host 127.0.0.1 --port 8000
    ```
 
 6. **启动前端应用**
@@ -152,7 +160,9 @@ xiaoyaosearch/
 ```bash
 # 启动后端开发服务器
 cd backend
-poetry run uvicorn app.main:app --reload
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Unix/Linux/macOS
+uvicorn main:app --reload
 
 # 启动前端 Electron 应用 (推荐使用 electron-vite)
 cd frontend

@@ -1,0 +1,73 @@
+"""
+Search schemas for API request/response validation.
+"""
+
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, validator
+
+
+class SearchFilter(BaseModel):
+    """Search filter schema."""
+    file_types: Optional[List[str]] = Field(None, description="File extensions to include")
+    exclude_types: Optional[List[str]] = Field(None, description="File extensions to exclude")
+    min_size: Optional[int] = Field(None, ge=0, description="Minimum file size in bytes")
+    max_size: Optional[int] = Field(None, ge=0, description="Maximum file size in bytes")
+    date_from: Optional[datetime] = Field(None, description="Search files from this date")
+    date_to: Optional[datetime] = Field(None, description="Search files until this date")
+    directories: Optional[List[str]] = Field(None, description="Directory paths to include")
+    exclude_directories: Optional[List[str]] = Field(None, description="Directory paths to exclude")
+
+
+class SearchRequest(BaseModel):
+    """Search request schema."""
+    query: str = Field(..., description="Search query text")
+    query_type: str = Field("text", pattern="^(text|voice|image)$", description="Query type")
+    search_mode: str = Field("hybrid", pattern="^(hybrid|vector|fulltext)$", description="Search mode")
+    limit: int = Field(20, ge=1, le=100, description="Maximum number of results")
+    offset: int = Field(0, ge=0, description="Result offset for pagination")
+    filters: Optional[SearchFilter] = None
+    include_content: bool = Field(False, description="Include file content in results")
+    highlight: bool = Field(True, description="Highlight matching terms in results")
+
+
+class SearchSuggestion(BaseModel):
+    """Search suggestion schema."""
+    text: str
+    type: str = Field(..., pattern="^(history|completion|correction)$")
+    score: float = Field(..., ge=0.0, le=1.0)
+
+
+class SearchResponse(BaseModel):
+    """Search response schema."""
+    results: List["FileSearchResult"]
+    total: int
+    query: str
+    search_time_ms: int
+    search_mode: str
+    filters_applied: Optional[Dict[str, Any]] = None
+    suggestions: Optional[List[SearchSuggestion]] = None
+
+    @validator("search_time_ms", pre=True, always=True)
+    def ensure_search_time(cls, v):
+        """Ensure search time is always set."""
+        return v or 0
+
+
+class SearchHistory(BaseModel):
+    """Search history schema."""
+    id: int
+    query_text: str
+    query_type: str
+    search_mode: str
+    result_count: int
+    search_time_ms: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Import here to avoid circular imports
+from schemas.file import FileSearchResult
+SearchResponse.update_forward_refs()

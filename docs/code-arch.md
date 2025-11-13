@@ -54,96 +54,61 @@ xiaoyaosearch-new/
 │   └── build/                   # 构建脚本
 │
 ├── backend/                     # 后端代码 (Python + FastAPI)
-│   ├── pyproject.toml           # Python项目配置
-│   ├── poetry.lock              # 依赖锁定文件
-│   ├── requirements.txt         # 依赖列表 (备用)
+│   ├── pyproject.toml           # Python项目配置 (工具配置)
+│   ├── requirements.txt         # 生产依赖
+│   ├── requirements-dev.txt     # 开发依赖
 │   ├── .env.example             # 环境变量示例
 │   ├── alembic.ini              # 数据库迁移配置
-│   ├── src/                     # 源代码
-│   │   ├── main.py              # FastAPI应用入口
-│   │   ├── config/              # 配置管理
-│   │   │   ├── __init__.py
-│   │   │   ├── settings.py      # 应用配置
-│   │   │   └── logging.py       # 日志配置
-│   │   ├── api/                 # API路由
-│   │   │   ├── __init__.py
-│   │   │   ├── deps.py          # 依赖注入
-│   │   │   ├── v1/              # API v1版本
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── router.py    # 路由汇总
-│   │   │   │   └── endpoints/   # 具体端点
-│   │   │   │       ├── __init__.py
-│   │   │   │       ├── search.py
-│   │   │   │       ├── files.py
-│   │   │   │       ├── index.py
-│   │   │   │       ├── ai.py
-│   │   │   │       ├── settings.py
-│   │   │   │       └── system.py
-│   │   │   └── websocket.py     # WebSocket处理
-│   │   ├── core/                # 核心业务逻辑
-│   │   │   ├── __init__.py
-│   │   │   ├── search/          # 搜索引擎
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── engine.py    # 搜索引擎主逻辑
-│   │   │   │   ├── query_parser.py  # 查询解析
-│   │   │   │   ├── result_fusion.py  # 结果融合
-│   │   │   │   └── highlighter.py    # 结果高亮
-│   │   │   ├── indexing/        # 索引管理
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── manager.py   # 索引管理器
-│   │   │   │   ├── scanner.py   # 文件扫描器
-│   │   │   │   ├── processor.py # 文件处理器
-│   │   │   │   └── monitor.py   # 文件监控器
-│   │   │   ├── ai/              # AI服务
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── llm.py       # LLM服务
-│   │   │   │   ├── embedding.py # 嵌入服务
-│   │   │   │   ├── asr.py       # 语音识别
-│   │   │   │   └── vision.py    # 视觉理解
-│   │   │   ├── storage/         # 数据存储
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── database.py  # 数据库操作
-│   │   │   │   ├── vector_store.py # 向量存储
-│   │   │   │   ├── text_store.py   # 文本存储
-│   │   │   │   └── cache.py        # 缓存管理
-│   │   │   └── models/          # 数据模型
-│   │   │       ├── __init__.py
-│   │   │       ├── database.py # SQLAlchemy模型
-│   │   │       ├── schemas.py  # Pydantic模型
-│   │   │       └── enums.py    # 枚举定义
-│   │   ├── services/            # 业务服务层
-│   │   │   ├── __init__.py
-│   │   │   ├── file_service.py  # 文件服务
-│   │   │   ├── search_service.py # 搜索服务
-│   │   │   ├── index_service.py # 索引服务
-│   │   │   ├── ai_service.py   # AI服务
-│   │   │   └── system_service.py # 系统服务
-│   │   ├── utils/               # 工具函数
-│   │   │   ├── __init__.py
-│   │   │   ├── file_utils.py    # 文件工具
-│   │   │   ├── text_utils.py    # 文本工具
-│   │   │   ├── crypto_utils.py  # 加密工具
-│   │   │   └── validation.py    # 数据验证
-│   │   └── workers/             # 后台任务
-│   │       ├── __init__.py
-│   │       ├── index_worker.py  # 索引任务
-│   │       └── cleanup_worker.py # 清理任务
-│   ├── migrations/              # 数据库迁移文件
-│   │   ├── versions/            # 迁移版本
-│   │   └── env.py               # Alembic环境配置
-│   ├── tests/                   # 测试代码
+│   ├── alembic_env.py           # Alembic环境配置
+│   ├── setup_env.py             # 环境设置脚本
+│   ├── setup.bat                # Windows快速设置脚本
+│   ├── setup.sh                 # Unix快速设置脚本
+│   ├── README.md                # 后端README文档
+│   ├── main.py                  # FastAPI应用入口
+│   ├── api/                     # API路由
 │   │   ├── __init__.py
-│   │   ├── conftest.py          # pytest配置
-│   │   ├── unit/                # 单元测试
-│   │   ├── integration/         # 集成测试
-│   │   └── fixtures/            # 测试数据
-│   ├── scripts/                 # 脚本工具
-│   │   ├── init_db.py           # 初始化数据库
-│   │   ├── download_models.py   # 下载AI模型
-│   │   └── migrate.py           # 数据迁移
-│   └── dist/                    # 打包输出目录
-│
-│
+│   │   ├── deps.py              # 依赖注入
+│   │   ├── v1/                  # API v1版本
+│   │   │   ├── __init__.py
+│   │   │   ├── api.py           # 路由汇总
+│   │   │   └── endpoints/       # 具体端点
+│   │   │       ├── __init__.py
+│   │   │       ├── search.py
+│   │   │       ├── files.py
+│   │   │       ├── directories.py
+│   │   │       ├── user_settings.py
+│   │   │       └── tags.py
+│   │   └── websocket.py         # WebSocket处理
+│   ├── core/                    # 核心业务逻辑
+│   │   ├── __init__.py
+│   │   ├── config.py            # 应用配置
+│   │   └── database.py          # 数据库配置
+│   ├── db/                      # 数据库相关
+│   │   ├── __init__.py
+│   │   └── base.py              # 数据库基类
+│   ├── models/                  # SQLAlchemy数据模型
+│   │   ├── __init__.py
+│   │   ├── file.py
+│   │   ├── directory.py
+│   │   ├── search_history.py
+│   │   ├── user_settings.py
+│   │   └── tag.py
+│   ├── schemas/                 # Pydantic数据验证模型
+│   │   ├── __init__.py
+│   │   ├── file.py
+│   │   ├── directory.py
+│   │   ├── search.py
+│   │   ├── user_settings.py
+│   │   └── tag.py
+│   ├── services/                # 业务服务层
+│   │   └── __init__.py
+│   ├── utils/                   # 工具函数
+│   │   └── __init__.py
+│   └── tests/                   # 测试代码
+│       ├── __init__.py
+│       ├── conftest.py          # pytest配置
+│       ├── unit/                # 单元测试
+│       └── integration/         # 集成测试
 ├── tools/                       # 开发工具和脚本
 │   ├── build.py                 # 构建脚本
 │   ├── dev.py                   # 开发服务器
@@ -684,9 +649,14 @@ backend/src/models/
 1. **后端开发服务器**:
 ```bash
 cd backend
-poetry install  # 安装依赖
-poetry shell   # 激活虚拟环境
-uvicorn src.main:app --reload  # 启动开发服务器
+# 自动设置环境
+python setup_env.py  # 或使用 setup.bat (Windows) / setup.sh (Unix)
+# 或手动设置
+python -m venv venv
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Unix/Linux/macOS
+pip install -r requirements.txt
+uvicorn main:app --reload  # 启动开发服务器
 ```
 
 2. **前端Electron开发服务器**:
