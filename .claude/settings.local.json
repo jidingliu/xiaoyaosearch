@@ -10,7 +10,9 @@
       "Bash(powershell:*)",
       "Bash(source:*)",
       "Bash(git reset:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(venv/Scripts/activate:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
