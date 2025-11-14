@@ -380,13 +380,15 @@ class VectorSearchManager:
             unique_files = set()
 
             for metadata in self.vector_index.id_mapping.values():
-                if metadata.get('type') == 'file':
+                if metadata and metadata.get('type') == 'file':
                     file_vectors += 1
-                    unique_files.add(metadata.get('file_id'))
-                elif metadata.get('type') == 'content':
+                    file_id = metadata.get('file_id')
+                    if file_id is not None:
+                        unique_files.add(file_id)
+                elif metadata and metadata.get('type') == 'content':
                     content_vectors += 1
                     file_id = metadata.get('file_id')
-                    if file_id:
+                    if file_id is not None:
                         unique_files.add(file_id)
 
             base_stats.update({

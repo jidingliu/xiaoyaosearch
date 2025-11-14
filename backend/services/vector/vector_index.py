@@ -75,8 +75,9 @@ class VectorIndex:
         Path(self.index_path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.id_mapping_path).parent.mkdir(parents=True, exist_ok=True)
 
-        # Try to load existing index
-        self._load_index()
+        # Try to load existing index, create if doesn't exist
+        if not self._load_index():
+            self._create_index()
 
     def _create_index(self) -> None:
         """Create a new IVFFlat index."""
@@ -85,9 +86,12 @@ class VectorIndex:
             quantizer = faiss.IndexFlatL2(self.dimension)
 
             # Create IVF index
-            self.index = faiss.IndexIVFFlat(quantizer, self.dimension, self.nlist)
+            ivf_index = faiss.IndexIVFFlat(quantizer, self.dimension, self.nlist)
 
-            logger.info(f"Created new IVFFlat index with {self.nlist} clusters")
+            # Wrap with IDMap to support custom IDs
+            self.index = faiss.IndexIDMap(ivf_index)
+
+            logger.info(f"Created new IVFFlat index with {self.nlist} clusters and ID mapping")
         except Exception as e:
             logger.error(f"Error creating index: {e}")
             raise
@@ -166,28 +170,22 @@ class VectorIndex:
         if len(vector_ids) != n_vectors:
             raise ValueError("Number of IDs must match number of vectors")
 
-        # Add to index (handle untrained index case)
+        # Train index if not trained and we have enough vectors
         if not self.is_trained:
-            # If index is not trained, temporarily use flat index
-            logger.warning("Index not trained, using flat index for initial vectors")
-            temp_index = faiss.IndexFlatL2(self.dimension)
-            temp_index.add_with_ids(vectors, np.array(vector_ids, dtype=np.int64))
+            if n_vectors >= self.nlist:
+                # Train with current vectors
+                logger.info(f"Training index with {n_vectors} vectors")
+                self._train_index(vectors)
+            else:
+                # Use a simple flat index for small datasets
+                logger.warning(f"Insufficient vectors ({n_vectors}) for IVF training (need {self.nlist}), using flat index")
+                # Replace the IVF index with a flat index that supports IDs
+                flat_index = faiss.IndexFlatL2(self.dimension)
+                self.index = faiss.IndexIDMap(flat_index)
+                self.is_trained = True
 
-            # If we now have enough vectors, train the main index and migrate
-            if self.index.ntotal + n_vectors >= self.nlist:
-                all_vectors = np.vstack([self._extract_all_vectors(), vectors]) if self.index.ntotal > 0 else vectors
-                self._train_index(all_vectors)
-
-                # Re-add all vectors to the trained index
-                if self.index.ntotal > 0:
-                    existing_ids = self._get_existing_ids()
-                    self.index.reset()
-                    self.index.add_with_ids(self._extract_all_vectors(), np.array(existing_ids, dtype=np.int64))
-
-                self.index.add_with_ids(vectors, np.array(vector_ids, dtype=np.int64))
-        else:
-            # Add vectors to trained index
-            self.index.add_with_ids(vectors, np.array(vector_ids, dtype=np.int64))
+        # Add vectors to the index
+        self.index.add_with_ids(vectors, np.array(vector_ids, dtype=np.int64))
 
         # Update ID mappings
         if metadata:
@@ -221,21 +219,22 @@ class VectorIndex:
         Returns:
             Tuple of (distances, vector_ids, metadata_list)
         """
-        if self.index is None or self.index.ntotal == 0:
-            logger.warning("Index is empty")
-            return np.array([]), np.array([], dtype=np.int64), []
-
-        # Prepare query vector
+        # Prepare query vector first to validate dimension
         query_vector = np.asarray(query_vector, dtype=np.float32).reshape(1, -1)
         if query_vector.shape[1] != self.dimension:
             raise ValueError(f"Query vector must have dimension {self.dimension}")
 
+        if self.index is None or self.index.ntotal == 0:
+            logger.warning("Index is empty")
+            return np.array([]), np.array([], dtype=np.int64), []
+
         # Set nprobe for search
+        original_nprobe = None
         if nprobe is not None:
-            original_nprobe = self.index.nprobe
-            self.index.nprobe = min(nprobe, self.nlist)
-        else:
-            original_nprobe = None
+            # Access the underlying IVF index through IDMap
+            if hasattr(self.index, 'index') and hasattr(self.index.index, 'nprobe'):
+                original_nprobe = self.index.index.nprobe
+                self.index.index.nprobe = min(nprobe, self.nlist)
 
         try:
             # Perform search
@@ -254,7 +253,7 @@ class VectorIndex:
         finally:
             # Restore original nprobe
             if original_nprobe is not None:
-                self.index.nprobe = original_nprobe
+                self.index.index.nprobe = original_nprobe
 
     def get_vector_count(self) -> int:
         """Get the number of vectors in the index."""
@@ -324,23 +323,30 @@ class VectorIndex:
         try:
             # Load index
             if os.path.exists(self.index_path):
-                self.index = faiss.read_index(self.index_path)
-                logger.info(f"Loaded index with {self.index.ntotal} vectors")
-
-                # Load ID mappings
+                # First load ID mappings to get configuration
+                loaded_mappings = {}
                 if os.path.exists(self.id_mapping_path):
                     with open(self.id_mapping_path, 'r') as f:
                         mapping_data = json.load(f)
+                    loaded_mappings = mapping_data
 
-                    self.id_mapping = mapping_data.get('id_mapping', {})
-                    self.reverse_id_mapping = mapping_data.get('reverse_id_mapping', {})
-                    self.next_id = mapping_data.get('next_id', 0)
-                    self.is_trained = mapping_data.get('is_trained', False)
-                    self.nlist = mapping_data.get('nlist', self.nlist)
-                    self.dimension = mapping_data.get('dimension', self.dimension)
+                # Update configuration from saved data
+                self.id_mapping = loaded_mappings.get('id_mapping', {})
+                self.reverse_id_mapping = loaded_mappings.get('reverse_id_mapping', {})
+                self.next_id = loaded_mappings.get('next_id', 0)
+                self.is_trained = loaded_mappings.get('is_trained', False)
+                saved_nlist = loaded_mappings.get('nlist', self.nlist)
+                saved_dimension = loaded_mappings.get('dimension', self.dimension)
 
-                    logger.info(f"Loaded {len(self.id_mapping)} ID mappings")
+                # Update instance variables
+                self.nlist = saved_nlist
+                self.dimension = saved_dimension
 
+                # Load the index
+                self.index = faiss.read_index(self.index_path)
+                logger.info(f"Loaded index with {self.index.ntotal} vectors")
+
+                logger.info(f"Loaded {len(self.id_mapping)} ID mappings")
                 return True
             return False
         except Exception as e:
@@ -349,9 +355,29 @@ class VectorIndex:
 
     def _extract_all_vectors(self) -> np.ndarray:
         """Extract all vectors from the index (used for re-indexing)."""
-        # This is a placeholder - actual implementation would depend on needs
-        logger.warning("Vector extraction not fully implemented")
-        return np.array([]).reshape(0, self.dimension)
+        return self._extract_vectors_from_ids(list(self.id_mapping.keys()))
+
+    def _extract_vectors_from_ids(self, vector_ids: List[int]) -> np.ndarray:
+        """
+        Extract vectors by their IDs from the index.
+
+        Args:
+            vector_ids: List of vector IDs to extract
+
+        Returns:
+            Array of vectors
+        """
+        if not vector_ids or self.index.ntotal == 0:
+            return np.array([]).reshape(0, self.dimension)
+
+        try:
+            # For IndexIDMap, we need to reconstruct vectors
+            # This is a simplified implementation - in practice you'd store vectors separately
+            logger.warning(f"Vector extraction for {len(vector_ids)} IDs - simplified implementation")
+            return np.array([]).reshape(0, self.dimension)
+        except Exception as e:
+            logger.error(f"Error extracting vectors: {e}")
+            return np.array([]).reshape(0, self.dimension)
 
     def _get_existing_ids(self) -> List[int]:
         """Get all existing vector IDs in the index."""
@@ -359,7 +385,10 @@ class VectorIndex:
 
     def get_metadata_by_id(self, vector_id: int) -> Optional[Dict[str, Any]]:
         """Get metadata for a vector ID."""
-        return self.id_mapping.get(vector_id)
+        # Try as integer first, then as string (JSON converts keys to strings)
+        if vector_id in self.id_mapping:
+            return self.id_mapping[vector_id]
+        return self.id_mapping.get(str(vector_id))
 
     def get_id_by_metadata(self, file_id: Optional[int] = None, content_id: Optional[str] = None) -> Optional[int]:
         """Get vector ID by metadata."""
@@ -400,7 +429,7 @@ class VectorIndex:
 
             # Create new index and add all vectors
             self._create_index()
-            if vectors:
+            if vectors is not None and len(vectors) > 0:
                 self.add_vectors(vectors, ids, metadata)
 
             logger.info("Vector index rebuilt successfully")
