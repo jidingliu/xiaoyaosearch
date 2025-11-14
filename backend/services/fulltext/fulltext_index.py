@@ -483,16 +483,27 @@ class FullTextIndex:
                 terms = []
                 reader = searcher.reader()
 
-                if reader.has_field(field):
+                # Fix for Whoosh 2.7.4 compatibility
+                has_field_method = hasattr(reader, 'has_field')
+                if has_field_method and reader.has_field(field):
                     field_obj = self.schema[field]
+                elif field in self.schema:
+                    field_obj = self.schema[field]
+                else:
+                    return terms
 
-                    # Generate suggestions based on prefix
-                    for term_bytes in reader.field_terms(field):
-                        term_text = term_bytes.decode('utf-8')
-                        if term_text.lower().startswith(prefix.lower()):
-                            terms.append(term_text)
-                            if len(terms) >= limit:
-                                break
+                # Generate suggestions based on prefix
+                for term in reader.field_terms(field):
+                    # Handle both bytes and string terms for Whoosh 2.7.4 compatibility
+                    if isinstance(term, bytes):
+                        term_text = term.decode('utf-8')
+                    else:
+                        term_text = str(term)
+
+                    if term_text.lower().startswith(prefix.lower()):
+                        terms.append(term_text)
+                        if len(terms) >= limit:
+                            break
 
                 return terms
 
@@ -511,9 +522,17 @@ class FullTextIndex:
             with self.index.searcher() as searcher:
                 reader = searcher.reader()
 
+                # Fix for Whoosh 2.7.4 compatibility
+                field_names = []
+                try:
+                    field_names = list(reader.field_names())
+                except AttributeError:
+                    # Fallback for older Whoosh versions
+                    field_names = list(self.schema.names())
+
                 stats = {
                     'doc_count': reader.doc_count(),
-                    'field_names': list(reader.field_names()),
+                    'field_names': field_names,
                     'index_size': 0,
                     'last_modified': None
                 }

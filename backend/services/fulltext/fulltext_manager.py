@@ -128,7 +128,7 @@ class FullTextSearchManager:
 
             for i, chunk in enumerate(chunks):
                 chunk_data = {
-                    'id': f"{file_id}_chunk_{i}",
+                    'doc_id': int(f"{file_id}{i:03d}"),  # Create unique integer ID
                     'title': chunk.get('title', f"Chunk {i+1}"),
                     'content': chunk['content'],
                     'filename': metadata.get('filename', ''),
