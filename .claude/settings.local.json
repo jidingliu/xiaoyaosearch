@@ -1,19 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(openspec list:*)",
-      "Bash(openspec validate:*)",
-      "Bash(python:*)",
-      "Bash(poetry install:*)",
-      "Bash(pip install:*)",
-      "Bash(find:*)",
-      "Bash(powershell:*)",
-      "Bash(source:*)",
-      "Bash(git reset:*)",
-      "Bash(git add:*)",
-      "Bash(venv/Scripts/activate:*)",
-      "Bash(rm:*)"
-    ],
+    "allow": [],
     "deny": [],
     "ask": []
   }

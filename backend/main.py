@@ -1,74 +1,76 @@
-"""
-Main FastAPI application entry point.
-"""
-
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import uvicorn
+import time
+import os
+import base64
+import logging
+from datetime import datetime
 from contextlib import asynccontextmanager
 
-from core.config import settings
-from core.database import engine
-from db.base import Base
-
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
-
-    Handles startup and shutdown events for the FastAPI application.
-    """
-    # Startup: Create database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+    # 启动时执行
+    logger.info("小遥搜索服务启动中...")
     yield
+    # 关闭时执行
+    logger.info("小遥搜索服务关闭中...")
 
-    # Shutdown: Cleanup resources
-    await engine.dispose()
-
-
-# Create FastAPI application with lifespan management
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    description=settings.PROJECT_DESCRIPTION,
-    version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    lifespan=lifespan,
+    title="小遥搜索 API",
+    description="多模态AI智能搜索桌面应用后端",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
-# Configure CORS middleware
+# CORS中间件，支持Electron跨域访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_HOSTS,
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # Electron渲染进程地址
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Health check endpoint
-@app.get("/health")
+# 健康检查
+@app.get("/api/system/health")
 async def health_check():
-    """Simple health check endpoint."""
-    return {"status": "healthy", "version": settings.VERSION}
+    """
+    系统健康检查
+    """
+    try:
+        return {
+            "success": True,
+            "data": {
+                "status": "healthy",
+                "timestamp": datetime.now().isoformat(),
+                "version": "1.0.0"
+            }
+        }
+    except Exception as e:
+        logger.error(f"健康检查失败: {str(e)}")
+        return {
+            "success": False,
+            "data": {
+                "status": "unhealthy",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+        }
 
-
-# Include API routers
-from api.v1.api import api_router
-app.include_router(api_router, prefix=settings.API_V1_STR)
-
-
-# Run the application when executed directly
+# 启动服务
 if __name__ == "__main__":
-    import uvicorn
-
-    print(f"启动 {settings.PROJECT_NAME} v{settings.VERSION}")
-    print(f"服务地址: http://{settings.HOST}:{settings.PORT}")
-    print(f"API 文档: http://{settings.HOST}:{settings.PORT}{settings.API_V1_STR}/docs")
-
     uvicorn.run(
-        app,
-        host=settings.HOST,
-        port=settings.PORT,
-        log_level="info"
+        "main:app",
+        host="127.0.0.1",
+        port=8000,
+        log_level="info",
+        reload=True
     )
