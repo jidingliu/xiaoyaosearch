@@ -110,16 +110,4 @@ class FileContentModel(Base):
         return f"<FileContentModel(id={self.id}, file_id={self.file_id}, language={self.language})>"
 
 
-# 扩展FileModel以包含content关系
-
-# 更新FileModel以包含反向关系
-class FileModelExtended(Base):
-    """
-    扩展的文件模型，用于包含content关系
-    注意：这是一个示例，实际应该修改原始的FileModel
-    """
-    __tablename__ = "files"
-
-    # 这里应该复制原始FileModel的所有字段
-    # 然后添加关系
-    content = relationship("FileContentModel", back_populates="file", uselist=False)
+# 注意：关系定义应该在FileModel中，这里保持文件内容模型的独立性
