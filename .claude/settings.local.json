@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(\".\\venv\\Scripts\\python.exe\" test_db_structure.py)",
-      "Bash(\".\\venv\\Scripts\\python.exe\" main.py)"
+      "Bash(\".\\venv\\Scripts\\python.exe\" main.py)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

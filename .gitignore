@@ -66,3 +66,6 @@ app/dist/
 
 # palywright
 .palywright-mcp/
+
+# 测试文件目录
+test-dir/
