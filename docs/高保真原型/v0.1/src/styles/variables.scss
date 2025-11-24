@@ -1,78 +1,76 @@
-// 小遥搜索 v2.0 设计系统变量
-// 深邃科技蓝紫渐变色彩系统
+// 小遥搜索设计系统 - 色彩与样式变量
 
+// 主色调 - 深邃科技蓝紫渐变
 :root {
-  // 主品牌色 - 深邃科技蓝紫渐变
+  // 主品牌色 - 具有强烈科技感的深色渐变
   --primary-gradient: linear-gradient(135deg, #1A1F4B 0%, #4A148C 50%, #00BCD4 100%);
   --primary-core: #2D3561;
   --primary-light: #3F4E8A;
   --primary-dark: #0D1117;
-  --primary-rgb: 26, 31, 75;
 
   // 强对比色 - 增强视觉冲击力
   --accent-cyan: #00E5FF;
-  --accent-cyan-rgb: 0, 229, 255;
   --accent-magenta: #FF006E;
-  --accent-magenta-rgb: 255, 0, 110;
   --accent-yellow: #FFD700;
-  --accent-yellow-rgb: 255, 215, 0;
+  --accent-purple: #9C27B0;
 
   // 深色主题背景 - 营造沉浸式体验
   --surface-primary: #0A0E27;
   --surface-secondary: #151933;
   --surface-tertiary: #1E2341;
-  --surface-quaternary: #252B4D;
-
-  // 语义化颜色
-  --success: #4ADE80;
-  --success-rgb: 74, 222, 128;
-  --warning: #F59E0B;
-  --warning-rgb: 245, 158, 11;
-  --error: #EF4444;
-  --error-rgb: 239, 68, 68;
-  --info: #3B82F6;
-  --info-rgb: 59, 130, 246;
+  --surface-quaternary: #252B4E;
 
   // 文字颜色
   --text-primary: #FFFFFF;
-  --text-secondary: #E2E8F0;
-  --text-tertiary: #94A3B8;
-  --text-quaternary: #64748B;
-  --text-disabled: #475569;
+  --text-secondary: #B8BCC8;
+  --text-tertiary: #7A8299;
+  --text-disabled: #4A5568;
+
+  // 语义化颜色
+  --success: #4ADE80;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #3B82F6;
 
   // 边框和分割线
-  --border-primary: rgba(255, 255, 255, 0.1);
-  --border-secondary: rgba(255, 255, 255, 0.05);
-  --border-accent: var(--accent-cyan);
+  --border-light: rgba(255, 255, 255, 0.1);
+  --border-medium: rgba(255, 255, 255, 0.2);
+  --border-heavy: rgba(255, 255, 255, 0.3);
 
-  // 间距系统 (基于8px网格)
-  --space-1: 4px;    // 极微调
-  --space-2: 8px;    // 最小间距
-  --space-3: 12px;   // 小间距
-  --space-4: 16px;   // 标准间距
-  --space-5: 20px;   // 中等间距
-  --space-6: 24px;   // 大间距
-  --space-8: 32px;   // 超大间距
-  --space-10: 40px;  // 段落间距
-  --space-12: 48px;  // 区块间距
-  --space-16: 64px;  // 页面间距
-  --space-20: 80px;  // 最大间距
-
-  // 圆角系统
-  --radius-sm: 2px;     // 微细元素
-  --radius-base: 6px;   // 按钮、标签
-  --radius-lg: 12px;    // 卡片、面板
-  --radius-xl: 20px;    // 搜索框
-  --radius-2xl: 32px;   // 大型容器
-  --radius-full: 9999px; // 圆形元素
-
-  // 阴影和光效
+  // 阴影系统
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-base: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
-  --shadow-glow-primary: 0 0 24px rgba(var(--accent-cyan-rgb), 0.6);
-  --shadow-glow-secondary: 0 0 16px rgba(76, 20, 140, 0.4);
-  --shadow-inset: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  // 发光效果
+  --glow-primary: 0 0 24px rgba(0, 229, 255, 0.6);
+  --glow-secondary: 0 0 16px rgba(76, 20, 140, 0.4);
+  --glow-accent: 0 0 20px rgba(255, 0, 110, 0.5);
+
+  // 间距系统 - 基于8px网格
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  // 圆角系统
+  --radius-sm: 2px;
+  --radius-base: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-2xl: 32px;
+  --radius-full: 9999px;
+  --radius-skew: 3px;
+  --radius-asymmetric: 8px 16px;
 
   // 字体系统
   --font-display: 'Noto Sans SC', 'Inter', 'SF Pro Display', sans-serif;
@@ -81,27 +79,22 @@
   --font-artistic: 'Noto Serif SC', 'Playfair Display', serif;
 
   // 字阶系统
-  --text-5xl: 48px;     // 主标题
-  --text-4xl: 36px;     // 章节标题
-  --text-3xl: 30px;     // 区块标题
-  --text-2xl: 24px;     // 卡片标题
-  --text-xl: 20px;      // 子标题
-  --text-lg: 18px;      // 重要正文
-  --text-base: 16px;    // 标准正文
-  --text-sm: 14px;      // 辅助文字
-  --text-xs: 12px;      // 标签文字
+  --text-xs: 12px / 16px;
+  --text-sm: 14px / 20px;
+  --text-base: 16px / 22px;
+  --text-lg: 18px / 24px;
+  --text-xl: 20px / 24px;
+  --text-2xl: 24px / 30px;
+  --text-3xl: 30px / 36px;
+  --text-4xl: 36px / 44px;
+  --text-5xl: 48px / 56px;
 
-  // 行高
-  --leading-tight: 1.25;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.75;
+  // 动画缓动函数
+  --ease-out-cubic: cubic-bezier(0.215, 0.610, 0.355, 1.000);
+  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1.000);
+  --ease-out-expo: cubic-bezier(0.190, 1.000, 0.220, 1.000);
 
-  // 过渡动画
-  --transition-fast: 150ms cubic-bezier(0.23, 1, 0.32, 1);
-  --transition-normal: 250ms cubic-bezier(0.23, 1, 0.32, 1);
-  --transition-slow: 400ms cubic-bezier(0.23, 1, 0.32, 1);
-
-  // Z-index 层级
+  // 层级系统
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-fixed: 1030;
@@ -110,4 +103,167 @@
   --z-popover: 1060;
   --z-tooltip: 1070;
   --z-toast: 1080;
+
+  // 组件特定变量
+  --search-box-height: 120px;
+  --result-card-padding: 24px;
+  --nav-height: 64px;
+  --sidebar-width: 280px;
+  --header-height: 72px;
+
+  // 响应式断点
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+}
+
+// 深色主题变量覆盖
+[data-theme="dark"] {
+  --surface-primary: #0A0E27;
+  --surface-secondary: #151933;
+  --surface-tertiary: #1E2341;
+  --text-primary: #FFFFFF;
+  --text-secondary: #B8BCC8;
+}
+
+// 浅色主题变量
+[data-theme="light"] {
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F8F9FA;
+  --surface-tertiary: #E9ECEF;
+  --text-primary: #212529;
+  --text-secondary: #6C757D;
+  --border-light: rgba(0, 0, 0, 0.1);
+  --border-medium: rgba(0, 0, 0, 0.2);
+}
+
+// CSS自定义属性动画
+@property --glow-intensity {
+  syntax: '<number>';
+  initial-value: 0.6;
+  inherits: false;
+}
+
+// 噪点纹理
+@mixin noise-texture {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    opacity: 0.03;
+    background-image:
+      repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,.1) 2px, rgba(255,255,255,.1) 4px);
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+// 玻璃态效果
+@mixin glass-morphism {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+// 霓虹发光效果
+@mixin neon-glow($color: var(--accent-cyan), $intensity: 0.6) {
+  box-shadow:
+    0 0 20px rgba($color, $intensity),
+    0 0 40px rgba($color, $intensity * 0.5),
+    0 0 60px rgba($color, $intensity * 0.3);
+}
+
+// 渐变文字效果
+@mixin gradient-text($gradient: var(--primary-gradient)) {
+  background: $gradient;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// 斜切设计效果
+@mixin skew-design($skew-angle: -2deg) {
+  transform: skew($skew-angle);
+  border-radius: var(--radius-skew);
+
+  &:hover {
+    transform: skew(0deg) translateY(-2px);
+  }
+}
+
+// 响应式混合器
+@mixin respond-to($breakpoint) {
+  @if $breakpoint == sm {
+    @media (max-width: 640px) { @content; }
+  }
+  @if $breakpoint == md {
+    @media (max-width: 768px) { @content; }
+  }
+  @if $breakpoint == lg {
+    @media (max-width: 1024px) { @content; }
+  }
+  @if $breakpoint == xl {
+    @media (max-width: 1280px) { @content; }
+  }
+}
+
+// 滚动条样式
+@mixin custom-scrollbar {
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--surface-secondary);
+    border-radius: var(--radius-full);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--accent-cyan);
+    border-radius: var(--radius-full);
+
+    &:hover {
+      background: var(--primary-light);
+    }
+  }
+}
+
+// 选择文本样式
+::selection {
+  background: rgba(0, 229, 255, 0.3);
+  color: var(--text-primary);
+}
+
+// 全局样式重置和增强
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--surface-primary);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// 焦点样式
+:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }

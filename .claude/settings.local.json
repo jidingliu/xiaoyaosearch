@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(npm run dev:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm install)",
+      "Bash(npm run type-check:*)",
+      "Bash(find:*)",
+      "Bash(xargs:*)",
+      "Bash(tree:*)",
+      "Skill(frontend-design)",
+      "Bash(move:*)"
     ],
     "deny": [],
     "ask": []
