@@ -11,6 +11,26 @@ from typing import Optional, Dict, Any, List
 import logging
 from dataclasses import dataclass
 
+# 导入MVP配置
+try:
+    from app.config.mvp_config import (
+        get_parser_method, get_content_config, is_mvp_mode,
+        get_format_display_name
+    )
+except ImportError:
+    # 如果配置文件不存在，使用默认配置
+    def get_parser_method(extension: str) -> str:
+        return ''
+
+    def get_content_config(file_type: str) -> Dict[str, Any]:
+        return {}
+
+    def is_mvp_mode() -> bool:
+        return False
+
+    def get_format_display_name(extension: str) -> str:
+        return extension.upper()
+
 # 文件处理库导入
 try:
     import chardet
@@ -65,7 +85,10 @@ class ContentParser:
     """内容解析器
 
     支持从各种文件格式中提取文本内容：
-    - 文档类：PDF、Word、Excel、PowerPoint
+    MVP阶段支持：
+    - 文档类：PDF、Word、Excel、PowerPoint、TXT、Markdown
+    - 音视频类：仅提取元数据（内容提取为未来功能）
+    非MVP阶段支持：
     - 文本类：TXT、Markdown、代码文件
     - 预留接口：音视频转文字、图片OCR
     """
@@ -77,29 +100,52 @@ class ContentParser:
             max_content_length: 最大内容长度限制（字符数）
         """
         self.max_content_length = max_content_length
-        self.supported_formats = {
-            '.pdf': self._parse_pdf,
-            '.docx': self._parse_docx,
-            '.xlsx': self._parse_excel,
-            '.pptx': self._parse_pptx,
-            '.txt': self._parse_text,
-            '.md': self._parse_markdown,
-            '.rtf': self._parse_text,  # 简化处理
-            '.py': self._parse_code,
-            '.js': self._parse_code,
-            '.ts': self._parse_code,
-            '.html': self._parse_html,
-            '.css': self._parse_code,
-            '.java': self._parse_code,
-            '.cpp': self._parse_code,
-            '.c': self._parse_code,
-            '.go': self._parse_code,
-            '.rs': self._parse_code,
-            '.php': self._parse_code,
-            '.rb': self._parse_code,
-            '.swift': self._parse_code,
-            '.kt': self._parse_code,
-        }
+        self.mvp_mode = is_mvp_mode()
+
+        if self.mvp_mode:
+            # MVP模式：只支持PRD要求的格式
+            self.supported_formats = {
+                # Office文档解析
+                '.pdf': self._parse_pdf,
+                '.docx': self._parse_docx,
+                '.xlsx': self._parse_excel,
+                '.pptx': self._parse_pptx,
+                # 文本文档解析
+                '.txt': self._parse_text,
+                '.md': self._parse_markdown,
+                # 音视频元数据解析
+                '.mp3': self._parse_audio_metadata,
+                '.wav': self._parse_audio_metadata,
+                '.mp4': self._parse_video_metadata,
+                '.avi': self._parse_video_metadata,
+            }
+            logger.info("使用MVP模式，支持PRD要求的核心文件格式")
+        else:
+            # 完整模式：支持所有格式
+            self.supported_formats = {
+                '.pdf': self._parse_pdf,
+                '.docx': self._parse_docx,
+                '.xlsx': self._parse_excel,
+                '.pptx': self._parse_pptx,
+                '.txt': self._parse_text,
+                '.md': self._parse_markdown,
+                '.rtf': self._parse_text,  # 简化处理
+                '.py': self._parse_code,
+                '.js': self._parse_code,
+                '.ts': self._parse_code,
+                '.html': self._parse_html,
+                '.css': self._parse_code,
+                '.java': self._parse_code,
+                '.cpp': self._parse_code,
+                '.c': self._parse_code,
+                '.go': self._parse_code,
+                '.rs': self._parse_code,
+                '.php': self._parse_code,
+                '.rb': self._parse_code,
+                '.swift': self._parse_code,
+                '.kt': self._parse_code,
+            }
+            logger.info("使用完整模式，支持所有文件格式")
 
         # 编码检测优先级
         self.encoding_priority = ['utf-8', 'gbk', 'gb2312', 'utf-16', 'latin-1', 'ascii']
@@ -126,7 +172,8 @@ class ContentParser:
                 logger.warning(f"不支持的文件格式: {extension}")
                 return ParsedContent(
                     text="",
-                    error=f"不支持的文件格式: {extension}"
+                    confidence=0.0,
+                    metadata={"error": f"不支持的文件格式: {extension}"}
                 )
 
             # 执行解析
@@ -145,7 +192,7 @@ class ContentParser:
 
         except Exception as e:
             logger.error(f"解析文件内容失败 {file_path}: {e}")
-            return ParsedContent(text="", error=str(e))
+            return ParsedContent(text="", confidence=0.0, metadata={"error": str(e)})
 
     def _parse_pdf(self, path: Path) -> ParsedContent:
         """解析PDF文件内容"""
@@ -244,14 +291,29 @@ class ContentParser:
             return ParsedContent(text="", error="Excel解析库不可用")
 
         try:
-            workbook = load_workbook(str(path), read_only=True)
+            # 根据文件大小决定读取模式
+            file_size = path.stat().st_size
+            use_read_only = file_size > 50 * 1024 * 1024  # 50MB以上使用read_only模式
+
+            if use_read_only:
+                workbook = load_workbook(str(path), read_only=True)
+            else:
+                workbook = load_workbook(str(path), read_only=False, data_only=True)
+
             text_parts = []
+            total_data_rows = 0
 
             for sheet_name in workbook.sheetnames:
                 sheet = workbook[sheet_name]
                 sheet_data = []
 
-                for row in sheet.iter_rows(values_only=True):
+                # 检查工作表大小
+                max_row = sheet.max_row if hasattr(sheet, 'max_row') else 1
+
+                # 限制处理的最大行数，防止内存溢出
+                max_process_rows = min(1000, max_row)  # 最多处理1000行
+
+                for row_idx, row in enumerate(sheet.iter_rows(values_only=True, max_row=max_process_rows)):
                     # 过滤空行
                     if any(cell is not None and str(cell).strip() for cell in row):
                         row_text = []
@@ -262,17 +324,39 @@ class ContentParser:
                                     row_text.append(cell_str)
                         if row_text:
                             sheet_data.append(" | ".join(row_text))
+                            total_data_rows += 1
 
+                    # 如果处理了足够的行，提前结束
+                    if row_idx >= max_process_rows - 1:
+                        break
+
+                # 添加工作表信息
                 if sheet_data:
-                    text_parts.append(f"[工作表: {sheet_name}]\n" + "\n".join(sheet_data))
+                    header = f"[工作表: {sheet_name} (显示前{len(sheet_data)}行数据)]"
+                    text_parts.append(header + "\n" + "\n".join(sheet_data))
+
+                    # 如果有更多数据未显示，添加说明
+                    if max_row > max_process_rows:
+                        remaining_rows = max_row - max_process_rows
+                        text_parts.append(f"\n... (还有 {remaining_rows:,} 行数据未显示)")
+                else:
+                    # 检查是否有表头等基础信息
+                    try:
+                        first_row = next(sheet.iter_rows(values_only=True), None)
+                        if first_row and any(cell is not None and str(cell).strip() for cell in first_row):
+                            header_text = " | ".join(str(cell).strip() for cell in first_row if cell and str(cell).strip())
+                            text_parts.append(f"[工作表: {sheet_name} - 表头]\n" + header_text)
+                            total_data_rows += 1
+                    except:
+                        pass
 
             text = "\n\n".join(text_parts)
 
             return ParsedContent(
-                text=text,
+                text=text if text else f"[Excel文档: {path.name} - 暂无可提取的文本内容]",
                 title=f"Excel文档 - {path.name}",
-                language=self._detect_language(text),
-                confidence=0.8 if text else 0.0
+                language=self._detect_language(text) if text else "zh",
+                confidence=0.8 if total_data_rows > 0 else 0.3
             )
 
         except Exception as e:
@@ -569,6 +653,147 @@ class ContentParser:
             return "en"
         else:
             return "unknown"
+
+    def _parse_audio_metadata(self, path: Path) -> ParsedContent:
+        """解析音频文件元数据（MVP阶段仅提取元数据，不提取内容）"""
+        try:
+            import mutagen
+            from mutagen.mp3 import MP3
+            from mutagen.wave import WAVE
+        except ImportError:
+            logger.warning("mutagen未安装，音频元数据提取功能不可用")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "audio", "message": "需要安装mutagen库以提取音频元数据"}
+            )
+
+        try:
+            extension = path.suffix.lower()
+            metadata = {
+                "format": "audio",
+                "file_extension": extension,
+                "file_size": path.stat().st_size
+            }
+
+            if extension == '.mp3':
+                audio = MP3(str(path))
+                if audio.info:
+                    metadata.update({
+                        "duration": audio.info.length,
+                        "bitrate": audio.info.bitrate,
+                        "sample_rate": audio.info.sample_rate,
+                        "channels": audio.info.channels,
+                        "layer": audio.info.layer,
+                        "version": audio.info.version
+                    })
+
+                # 提取标签信息
+                if audio.tags:
+                    for key, value in audio.tags.items():
+                        if isinstance(value, list) and len(value) == 1:
+                            metadata[key] = str(value[0])
+                        else:
+                            metadata[key] = str(value)
+
+            elif extension == '.wav':
+                audio = WAVE(str(path))
+                if audio.info:
+                    metadata.update({
+                        "duration": audio.info.length,
+                        "sample_rate": audio.info.sample_rate,
+                        "channels": audio.info.channels,
+                        "bits_per_sample": getattr(audio.info, 'bits_per_sample', 0)
+                    })
+
+            format_name = get_format_display_name(extension)
+            return ParsedContent(
+                text=f"[{format_name} 元数据已提取] - 内容提取功能将在后续版本支持",
+                title=metadata.get('TIT2') or metadata.get('title'),
+                language="metadata",
+                confidence=0.9,
+                metadata=metadata
+            )
+
+        except Exception as e:
+            logger.error(f"解析音频元数据失败 {path}: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "audio", "error": str(e)}
+            )
+
+    def _parse_video_metadata(self, path: Path) -> ParsedContent:
+        """解析视频文件元数据（MVP阶段仅提取元数据，不提取内容）"""
+        try:
+            import cv2
+        except ImportError:
+            logger.warning("opencv-python未安装，视频元数据提取功能不可用")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "video", "message": "需要安装opencv-python库以提取视频元数据"}
+            )
+
+        try:
+            cap = cv2.VideoCapture(str(path))
+
+            if not cap.isOpened():
+                raise ValueError("无法打开视频文件")
+
+            metadata = {
+                "format": "video",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size
+            }
+
+            # 获取视频基本信息
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            if fps > 0:
+                duration = frame_count / fps
+            else:
+                duration = 0
+
+            metadata.update({
+                "duration": duration,
+                "fps": fps,
+                "frame_count": frame_count,
+                "width": width,
+                "height": height,
+                "resolution": f"{width}x{height}",
+                "codec": cv2.VideoWriter_fourcc(*'DIVX').item() if hasattr(cv2.VideoWriter_fourcc(*'DIVX'), 'item') else 'unknown'
+            })
+
+            cap.release()
+
+            format_name = get_format_display_name(path.suffix)
+            return ParsedContent(
+                text=f"[{format_name} 元数据已提取] - 内容提取功能将在后续版本支持",
+                title=None,
+                language="metadata",
+                confidence=0.9,
+                metadata=metadata
+            )
+
+        except Exception as e:
+            logger.error(f"解析视频元数据失败 {path}: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "video", "error": str(e)}
+            )
 
     def get_supported_formats(self) -> List[str]:
         """获取支持的文件格式"""

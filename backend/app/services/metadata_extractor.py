@@ -8,7 +8,7 @@ import os
 import hashlib
 import mimetypes
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 import logging
 
@@ -80,16 +80,22 @@ class MetadataExtractor:
             'archive': ['.zip', '.rar', '.7z', '.tar', '.gz']
         }
 
-    def extract_metadata(self, file_path: str) -> Dict[str, Any]:
+    def extract_metadata(self, file_input: Union[str, Any]) -> Dict[str, Any]:
         """提取文件元数据
 
         Args:
-            file_path: 文件路径
+            file_input: 文件路径字符串或FileInfo对象
 
         Returns:
             Dict[str, Any]: 包含文件元数据的字典
         """
         try:
+            # 处理不同的输入类型
+            if hasattr(file_input, 'path'):  # FileInfo对象
+                file_path = file_input.path
+            else:  # 字符串路径
+                file_path = file_input
+
             path = Path(file_path)
             if not path.exists():
                 raise FileNotFoundError(f"文件不存在: {file_path}")

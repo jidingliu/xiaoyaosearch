@@ -14,6 +14,20 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
+# 导入MVP配置
+try:
+    from app.config.mvp_config import get_mvp_supported_extensions, is_mvp_mode, get_file_type
+except ImportError:
+    # 如果配置文件不存在，使用默认配置
+    def get_mvp_supported_extensions() -> Set[str]:
+        return set()
+
+    def is_mvp_mode() -> bool:
+        return False
+
+    def get_file_type(extension: str) -> str:
+        return 'unknown'
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,10 +53,11 @@ class FileScanner:
     - 文件类型过滤
     - 基于哈希的变更检测
     - 增量扫描
+    - MVP模式配置
     """
 
-    # 默认支持的文件类型
-    DEFAULT_SUPPORTED_EXTENSIONS = {
+    # 完整的文件类型支持（非MVP模式）
+    FULL_SUPPORTED_EXTENSIONS = {
         # 文档类
         '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
         '.txt', '.md', '.rtf', '.odt', '.ods', '.odp',
@@ -58,6 +73,26 @@ class FileScanner:
         # 压缩包
         '.zip', '.rar', '.7z', '.tar', '.gz',
     }
+
+    @property
+    def DEFAULT_SUPPORTED_EXTENSIONS(self) -> Set[str]:
+        """根据模式返回支持的文件扩展名"""
+        if is_mvp_mode():
+            mvp_extensions = get_mvp_supported_extensions()
+            if mvp_extensions:
+                logger.info(f"使用MVP模式，支持 {len(mvp_extensions)} 种文件格式")
+                return mvp_extensions
+            else:
+                logger.warning("MVP模式已启用但配置未找到，使用默认MVP格式")
+                return {
+                    '.mp4', '.avi',  # 视频
+                    '.mp3', '.wav',  # 音频
+                    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',  # Office
+                    '.txt', '.md',   # 文本文档
+                }
+        else:
+            logger.info(f"使用完整模式，支持 {len(self.FULL_SUPPORTED_EXTENSIONS)} 种文件格式")
+            return self.FULL_SUPPORTED_EXTENSIONS
 
     def __init__(
         self,
