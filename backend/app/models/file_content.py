@@ -111,7 +111,6 @@ class FileContentModel(Base):
 
 
 # 扩展FileModel以包含content关系
-from sqlalchemy.orm import back_populates
 
 # 更新FileModel以包含反向关系
 class FileModelExtended(Base):
