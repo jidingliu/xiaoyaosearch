@@ -33,44 +33,17 @@
         </a-menu>
 
         <div class="header-actions">
-          <!-- 通知按钮 -->
-          <a-badge count="2" size="small">
-            <a-button type="text" size="small" class="header-btn">
-              <BellOutlined />
-            </a-button>
-          </a-badge>
-
-          <!-- 主题切换 -->
-          <a-button type="text" size="small" class="header-btn" @click="toggleTheme">
-            <BulbOutlined v-if="isDarkMode" />
-            <BulbOutlined v-else />
+          <!-- 官方站点 -->
+          <a-button type="text" class="header-btn" @click="openOfficialSite">
+            <GlobalOutlined />
+            <span class="btn-text">官方站点</span>
           </a-button>
 
-          <!-- 用户头像 -->
-          <a-dropdown>
-            <a-button type="text" size="small" class="header-btn user-btn">
-              <UserOutlined />
-              <span class="user-name">管理员</span>
-              <DownOutlined />
-            </a-button>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item key="profile">
-                  <UserOutlined />
-                  个人资料
-                </a-menu-item>
-                <a-menu-item key="about">
-                  <InfoCircleOutlined />
-                  关于
-                </a-menu-item>
-                <a-menu-divider />
-                <a-menu-item key="logout">
-                  <LogoutOutlined />
-                  退出
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
+          <!-- 用户信息 -->
+          <a-button type="text" class="header-btn user-btn">
+            <UserOutlined />
+            <span class="user-name">小遥用户</span>
+          </a-button>
         </div>
       </div>
     </a-layout-header>
@@ -126,12 +99,8 @@ import {
   SettingOutlined,
   DatabaseOutlined,
   QuestionCircleOutlined,
-  BellOutlined,
-  BulbOutlined,
+  GlobalOutlined,
   UserOutlined,
-  DownOutlined,
-  InfoCircleOutlined,
-  LogoutOutlined,
   CheckCircleOutlined,
   HddOutlined,
   SearchOutlined
@@ -141,7 +110,6 @@ const router = useRouter()
 const route = useRoute()
 
 // 响应式数据
-const isDarkMode = ref(false)
 const indexCount = ref(1234)
 const dataSize = ref(8700000000) // 8.7GB
 const searchCount = ref(15)
@@ -171,11 +139,10 @@ const handleMenuClick = ({ key }: { key: string }) => {
   }
 }
 
-// 主题切换
-const toggleTheme = () => {
-  isDarkMode.value = !isDarkMode.value
-  document.documentElement.setAttribute('data-theme', isDarkMode.value ? 'dark' : 'light')
-  message.success(`已切换到${isDarkMode.value ? '深色' : '浅色'}主题`)
+// 打开官方站点
+const openOfficialSite = () => {
+  window.open('https://xiaoyaosearch.com', '_blank')
+  message.info('正在打开官方站点...')
 }
 
 // 格式化文件大小
@@ -279,18 +246,21 @@ onMounted(() => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .header-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  min-width: 100px;
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-lg);
   color: var(--text-secondary);
   transition: all var(--transition-base);
+  font-size: 14px;
+  gap: var(--space-1);
 }
 
 .header-btn:hover {
@@ -298,14 +268,26 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
+.btn-text {
+  margin-left: var(--space-1);
+  white-space: nowrap;
+}
+
 .user-btn {
-  width: auto;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-lg);
+  min-width: 120px;
+  background: var(--primary-50);
+  color: var(--primary-600);
+  border: 1px solid var(--primary-200);
+}
+
+.user-btn:hover {
+  background: var(--primary-100);
+  color: var(--primary-700);
 }
 
 .user-name {
-  margin: 0 var(--space-1);
+  margin-left: var(--space-1);
+  font-weight: 500;
 }
 
 .app-content {

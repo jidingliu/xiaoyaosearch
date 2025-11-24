@@ -362,11 +362,12 @@ const formatDate = (dateString: string): string => {
 }
 
 .preview-text :deep(em) {
-  background: var(--warning-light);
-  color: var(--warning-dark);
-  padding: 1px 2px;
-  border-radius: 2px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #d97706;
+  padding: 2px 4px;
+  border-radius: 4px;
   font-style: normal;
+  font-weight: 500;
 }
 
 .file-metadata {

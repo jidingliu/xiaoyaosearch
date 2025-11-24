@@ -2,8 +2,8 @@
   <div class="home-container">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h1 class="page-title">文件搜索</h1>
-      <p class="page-subtitle">支持多模态输入，快速找到您需要的文件</p>
+      <h1 class="page-title">小遥搜索</h1>
+      <p class="page-subtitle">多模态智能搜索，让文件触手可及</p>
     </div>
 
     <!-- 搜索区域 -->
@@ -109,7 +109,7 @@
               </p>
               <p class="ant-upload-text">拖拽图片到此处，或点击选择</p>
               <p class="ant-upload-hint">
-                支持 JPG、PNG、WEBP 格式，最大 10MB
+                支持 JPG、JPEG、PNG 格式，最大 10MB
               </p>
             </a-upload-dragger>
             <div v-if="uploadedImage" class="uploaded-image">
@@ -214,6 +214,37 @@
         </div>
       </div>
 
+      <!-- 支持的文件格式信息 -->
+      <div class="supported-formats" v-if="!isSearching">
+        <a-alert
+          message="支持的文件格式"
+          type="info"
+          show-icon
+          closable
+        >
+          <template #description>
+            <div class="formats-grid">
+              <div class="format-category">
+                <strong>📄 文档文件:</strong>
+                <span>txt, md, pdf, docx, xlsx, pptx, doc, xls, ppt</span>
+              </div>
+              <div class="format-category">
+                <strong>🎵 音频文件:</strong>
+                <span>mp3, wav</span>
+              </div>
+              <div class="format-category">
+                <strong>🎬 视频文件:</strong>
+                <span>mp4, avi</span>
+              </div>
+              <div class="format-category">
+                <strong>🖼️ 图片文件:</strong>
+                <span>jpg, jpeg, png</span>
+              </div>
+            </div>
+          </template>
+        </a-alert>
+      </div>
+
       <!-- 结果列表 -->
       <div class="results-list">
         <a-spin :spinning="isSearching" size="large">
@@ -242,7 +273,6 @@
     <!-- 空状态 -->
     <div class="empty-state" v-else-if="!isSearching && hasSearched">
       <a-empty
-        image="/empty.svg"
         description="没有找到相关文件"
       >
         <template #image>

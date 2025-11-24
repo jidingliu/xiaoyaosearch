@@ -139,21 +139,25 @@ html, body {
   transform: translateY(-1px);
 }
 
- multimodal-indicator {
+ .multimodal-indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 3rem;
-  height: 3rem;
+  width: 4.5rem;
+  height: 4.5rem;
   border-radius: 50%;
   background: var(--surface-01);
   border: 2px solid var(--border-light);
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: 1.125rem;
   transition: all var(--transition-base);
   cursor: pointer;
-  margin: 0 var(--space-2);
+  margin: 0 var(--space-3);
+}
+
+.multimodal-indicator .anticon {
+  font-size: 1.5rem !important;
 }
 
 .multimodal-indicator:hover {
@@ -242,3 +246,4 @@ html, body {
   opacity: 0;
   transform: translateY(-10px);
 }
+
