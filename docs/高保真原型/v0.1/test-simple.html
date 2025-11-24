@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>简单测试页面</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 40px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+      h1 {
+        color: #1890ff;
+        text-align: center;
+      }
+      .test-item {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #d9d9d9;
+        border-radius: 4px;
+      }
+      .success {
+        border-color: #52c41a;
+        background: #f6ffed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 小遥搜索 - 基础测试页面</h1>
+
+      <div class="test-item success">
+        <h3>✅ HTML文件正常</h3>
+        <p>如果您能看到这个页面，说明基础文件系统正常工作</p>
+      </div>
+
+      <div class="test-item">
+        <h3>📋 测试清单</h3>
+        <ul>
+          <li>✅ 文件系统访问正常</li>
+          <li>⏳ Vue.js 应用加载中...</li>
+          <li>⏳ 开发服务器运行中...</li>
+        </ul>
+      </div>
+
+      <div class="test-item">
+        <h3>🔧 调试信息</h3>
+        <p>当前时间：<span id="time"></span></p>
+        <p>浏览器：<span id="browser"></span></p>
+        <p>用户代理：<span id="userAgent"></span></p>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById('time').textContent = new Date().toLocaleString();
+      document.getElementById('browser').textContent = navigator.appName;
+      document.getElementById('userAgent').textContent = navigator.userAgent;
+
+      console.log('基础测试页面加载成功');
+      console.log('Vue.js 应用应该会在 http://localhost:5173 加载');
+    </script>
+  </body>
+</html>
