@@ -17,7 +17,8 @@
       "Bash(./venv/Scripts/pip.exe:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []
