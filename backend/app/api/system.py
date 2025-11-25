@@ -38,40 +38,52 @@ async def health_check(db: Session = Depends(get_db)):
         disk = psutil.disk_usage('/')
         cpu_percent = psutil.cpu_percent(interval=1)
 
-        # AI模型状态（模拟）
-        ai_models_status = {
-            "bge_m3": {
-                "status": "loaded",
-                "memory_usage": "2.1GB",
-                "last_used": datetime.now().isoformat()
-            },
-            "faster_whisper": {
-                "status": "not_loaded",
-                "error": None,
-                "memory_usage": "0GB"
-            },
-            "cn_clip": {
-                "status": "loaded",
-                "memory_usage": "1.5GB",
-                "last_used": datetime.now().isoformat()
+        # 获取真实的AI模型状态
+        ai_models_status = {}
+        try:
+            # 尝试获取AI模型服务状态
+            from app.services.ai_model_manager import ai_model_service
+            ai_models_status = await ai_model_service.get_model_status()
+        except Exception as e:
+            logger.warning(f"无法获取AI模型状态: {str(e)}")
+            # 提供默认状态
+            ai_models_status = {
+                "error": f"AI模型服务不可用: {str(e)}",
+                "bge_m3": {"status": "unknown", "error": "模型服务不可用"},
+                "faster_whisper": {"status": "unknown", "error": "模型服务不可用"},
+                "cn_clip": {"status": "unknown", "error": "模型服务不可用"}
             }
-        }
 
-        # 索引状态（模拟）
-        indexes_status = {
-            "faiss_index": {
-                "status": "ready",
-                "document_count": 15420,
-                "index_size": "2.3GB",
-                "last_updated": datetime.now().isoformat()
-            },
-            "whoosh_index": {
-                "status": "ready",
-                "document_count": 15420,
-                "index_size": "450MB",
-                "last_updated": datetime.now().isoformat()
+        # 获取真实的索引状态
+        indexes_status = {}
+        try:
+            # 获取搜索服务实例
+            from app.services.search_service import get_search_service
+            search_service = get_search_service()
+            index_info = search_service.get_index_info()
+
+            # 转换索引状态格式
+            indexes_status = {
+                "faiss_index": {
+                    "status": "ready" if index_info.get('faiss_available') else "not_available",
+                    "document_count": index_info.get('faiss_doc_count', 0),
+                    "index_size": f"{index_info.get('faiss_doc_count', 0) * 150}KB",  # 估算大小
+                    "dimension": index_info.get('faiss_dimension', 'unknown'),
+                    "last_updated": datetime.now().isoformat()
+                },
+                "whoosh_index": {
+                    "status": "ready" if index_info.get('whoosh_available') else "not_available",
+                    "document_count": index_info.get('whoosh_doc_count', 0),
+                    "index_size": f"{index_info.get('whoosh_doc_count', 0) * 50}KB",  # 估算大小
+                    "last_updated": datetime.now().isoformat()
+                }
             }
-        }
+        except Exception as e:
+            logger.warning(f"无法获取索引状态: {str(e)}")
+            indexes_status = {
+                "faiss_index": {"status": "error", "error": str(e)},
+                "whoosh_index": {"status": "error", "error": str(e)}
+            }
 
         # 服务状态
         services_status = {
@@ -343,30 +355,100 @@ async def get_application_logs(
                 "message": "日志文件不存在"
             }
 
-        # TODO: 实现日志读取和过滤逻辑
-        # 这里暂时返回模拟数据
-        mock_logs = [
-            {
+        # 读取真实日志文件
+        real_logs = []
+        try:
+            if os.path.exists(log_file):
+                # 读取日志文件最后N行
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    all_lines = f.readlines()
+
+                # 过滤日志级别
+                filtered_lines = []
+                if level.lower() == 'all':
+                    filtered_lines = all_lines
+                else:
+                    level_upper = level.upper()
+                    for line in all_lines:
+                        if level_upper in line:
+                            filtered_lines.append(line)
+                        elif 'DEBUG' in line and level_upper in ['INFO', 'WARNING', 'ERROR']:
+                            filtered_lines.append(line)
+                        elif 'INFO' in line and level_upper in ['WARNING', 'ERROR']:
+                            filtered_lines.append(line)
+                        elif 'WARNING' in line and level_upper == 'ERROR':
+                            filtered_lines.append(line)
+
+                # 取最后N行
+                recent_lines = filtered_lines[-lines:] if len(filtered_lines) > lines else filtered_lines
+
+                # 解析日志格式
+                for line in recent_lines:
+                    try:
+                        # 尝试解析标准日志格式：时间戳 - 模块名 - 级别 - 消息
+                        if ' - ' in line:
+                            parts = line.strip().split(' - ', 3)
+                            if len(parts) >= 4:
+                                timestamp_str = parts[0]
+                                module = parts[1]
+                                level_str = parts[2]
+                                message = parts[3]
+
+                                real_logs.append({
+                                    "timestamp": timestamp_str,
+                                    "level": level_str,
+                                    "message": message,
+                                    "module": module
+                                })
+                            else:
+                                # 简单格式处理
+                                real_logs.append({
+                                    "timestamp": datetime.now().isoformat(),
+                                    "level": "INFO",
+                                    "message": line.strip(),
+                                    "module": "unknown"
+                                })
+                        else:
+                            real_logs.append({
+                                "timestamp": datetime.now().isoformat(),
+                                "level": "INFO",
+                                "message": line.strip(),
+                                "module": "unknown"
+                            })
+                    except Exception as e:
+                        # 解析失败时保留原始内容
+                        real_logs.append({
+                            "timestamp": datetime.now().isoformat(),
+                            "level": "INFO",
+                            "message": line.strip(),
+                            "module": "unknown"
+                        })
+            else:
+                real_logs.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "level": "WARNING",
+                    "message": f"日志文件不存在: {log_file}",
+                    "module": "system"
+                })
+
+        except Exception as e:
+            logger.error(f"读取日志文件失败: {str(e)}")
+            real_logs.append({
                 "timestamp": datetime.now().isoformat(),
-                "level": "INFO",
-                "message": "应用启动完成",
-                "module": "main"
-            },
-            {
-                "timestamp": datetime.now().isoformat(),
-                "level": "DEBUG",
-                "message": "数据库连接建立",
-                "module": "database"
-            }
-        ]
+                "level": "ERROR",
+                "message": f"读取日志失败: {str(e)}",
+                "module": "system"
+            })
 
         return {
             "success": True,
             "data": {
-                "logs": mock_logs[-lines:],
-                "total_lines": len(mock_logs),
+                "logs": real_logs,
+                "total_lines": len(real_logs),
                 "log_file": log_file,
-                "filter_level": level
+                "filter_level": level,
+                "file_exists": os.path.exists(log_file),
+                "file_size": os.path.getsize(log_file) if os.path.exists(log_file) else 0
             },
             "message": "获取应用日志成功"
         }

@@ -170,27 +170,99 @@ async def test_ai_model(
         if request and request.config_override:
             config.update(request.config_override)
 
-        # TODO: 实现实际的模型测试逻辑
-        # 这里暂时返回模拟测试结果
+        # 执行真实的模型测试
         import time
         start_time = time.time()
 
-        # 模拟测试延迟
-        await asyncio.sleep(1)
+        test_passed = False
+        test_message = f"开始测试{model_config.model_name}模型..."
+
+        try:
+            # 导入AI模型服务
+            from app.services.ai_model_manager import ai_model_service
+
+            # 根据模型类型执行相应测试
+            if is_embedding_model(model_config.model_type):
+                # 测试文本嵌入模型
+                test_text = "这是一个测试文本，用于验证文本嵌入模型的功能。"
+                embedding_result = await ai_model_service.text_embedding(test_text)
+
+                if embedding_result is not None:
+                    # 检查向量维度
+                    if hasattr(embedding_result, 'shape'):
+                        dimension = embedding_result.shape[1] if len(embedding_result.shape) > 1 else len(embedding_result)
+                    elif hasattr(embedding_result, '__len__'):
+                        dimension = len(embedding_result)
+                    else:
+                        dimension = 'unknown'
+
+                    test_passed = True
+                    test_message = f"文本嵌入模型测试成功，向量维度: {dimension}，响应正常"
+                else:
+                    test_passed = False
+                    test_message = "文本嵌入模型测试失败：无法生成嵌入向量"
+
+            elif is_speech_model(model_config.model_type):
+                # 测试语音识别模型（使用模拟音频数据）
+                test_audio = b"mock_audio_data_for_testing"  # 模拟音频数据
+                try:
+                    speech_result = await ai_model_service.speech_to_text(test_audio)
+                    if speech_result and "text" in speech_result:
+                        test_passed = True
+                        confidence = speech_result.get("avg_confidence", 0)
+                        test_message = f"语音识别模型测试成功，置信度: {confidence:.2f}"
+                    else:
+                        test_passed = False
+                        test_message = "语音识别模型测试失败：无法识别音频"
+                except Exception as e:
+                    test_passed = False
+                    test_message = f"语音识别模型测试失败：{str(e)}"
+
+            elif is_vision_model(model_config.model_type):
+                # 测试图像理解模型（使用模拟图像数据）
+                test_image = b"mock_image_data_for_testing"  # 模拟图像数据
+                test_texts = ["描述这张图片的内容", "这张图片展示了什么"]
+                try:
+                    vision_result = await ai_model_service.image_understanding(test_image, test_texts)
+                    if vision_result and "best_match" in vision_result:
+                        test_passed = True
+                        similarity = vision_result["best_match"].get("similarity", 0)
+                        test_message = f"图像理解模型测试成功，相似度: {similarity:.2f}"
+                    else:
+                        test_passed = False
+                        test_message = "图像理解模型测试失败：无法理解图像"
+                except Exception as e:
+                    test_passed = False
+                    test_message = f"图像理解模型测试失败：{str(e)}"
+
+            elif is_llm_model(model_config.model_type):
+                # 测试大语言模型
+                test_message = "你好，请介绍一下你自己"
+                try:
+                    llm_result = await ai_model_service.text_generation(test_message)
+                    if llm_result and "text" in llm_result:
+                        test_passed = True
+                        generated_text = llm_result["text"][:100]  # 只取前100字符
+                        test_message = f"大语言模型测试成功，生成内容: {generated_text}..."
+                    else:
+                        test_passed = False
+                        test_message = "大语言模型测试失败：无法生成文本"
+                except Exception as e:
+                    test_passed = False
+                    test_message = f"大语言模型测试失败：{str(e)}"
+
+            else:
+                test_passed = False
+                test_message = f"未知模型类型: {model_config.model_type}"
+
+        except ImportError:
+            test_passed = False
+            test_message = "AI模型服务不可用，无法执行测试"
+        except Exception as e:
+            test_passed = False
+            test_message = f"模型测试失败: {str(e)}"
 
         response_time = time.time() - start_time
-        test_passed = True
-        test_message = f"{model_config.model_name}模型测试成功"
-
-        # 根据模型类型调整测试结果
-        if is_embedding_model(model_config.model_type):
-            test_message += "，向量维度768，响应正常"
-        elif is_speech_model(model_config.model_type):
-            test_message += "，语音识别准确率95%"
-        elif is_vision_model(model_config.model_type):
-            test_message += "，图像理解功能正常"
-        elif is_llm_model(model_config.model_type):
-            test_message += "，文本生成质量良好"
 
         logger.info(f"AI模型测试完成: id={model_id}, 通过={test_passed}, 耗时={response_time:.2f}秒")
 

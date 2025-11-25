@@ -228,29 +228,45 @@ async def multimodal_search(
             confidence = vision_result.get("best_match", {}).get("similarity", 0.0)
             ai_models_used.append("CN-CLIP")
 
-        # 如果成功转换，进行搜索
+        # 如果成功转换，进行真实搜索
+        search_results = []
         if converted_text:
             # 获取搜索查询的嵌入向量
             if (is_semantic_search(search_type) or is_hybrid_search(search_type)) and AI_MODEL_SERVICE_AVAILABLE:
                 await ai_model_service.text_embedding(converted_text, normalize_embeddings=True)
                 ai_models_used.append("BGE-M3")
 
-        # 模拟搜索结果
-        mock_results = [
-            SearchResult(
-                file_id=2,
-                file_name="匹配的文件.pdf",
-                file_path="/path/to/matching_file.pdf",
-                file_type="document",
-                relevance_score=0.88,
-                preview_text="匹配文件的内容预览...",
-                highlight="匹配<em>文件</em>的内容预览",
-                created_at="2024-01-10T09:20:00Z",
-                modified_at="2024-01-10T09:20:00Z",
-                file_size=2048000,
-                match_type="semantic"
-            )
-        ]
+            # 执行真实的搜索
+            search_service = get_search_service()
+            if search_service.is_ready():
+                search_result = await search_service.search(
+                    query=converted_text,
+                    search_type=search_type_str,
+                    limit=limit,
+                    offset=0,
+                    threshold=threshold,
+                    filters=None
+                )
+
+                # 转换搜索结果为SearchResult格式
+                for item in search_result.get('results', []):
+                    search_results.append(SearchResult(
+                        file_id=item.get('id', 0),
+                        file_name=item.get('file_name', ''),
+                        file_path=item.get('file_path', ''),
+                        file_type=item.get('file_type', ''),
+                        relevance_score=item.get('relevance_score', 0.0),
+                        preview_text=item.get('preview_text', ''),
+                        highlight=item.get('highlight', ''),
+                        created_at=item.get('modified_time', ''),
+                        modified_at=item.get('modified_time', ''),
+                        file_size=item.get('file_size', 0),
+                        match_type=item.get('match_type', '')
+                    ))
+            else:
+                logger.warning("搜索服务未就绪，无法进行搜索")
+        else:
+            logger.warning("无法转换输入内容，跳过搜索")
 
         # 计算响应时间
         response_time = time.time() - start_time
@@ -261,19 +277,19 @@ async def multimodal_search(
             input_type=input_type_str,
             search_type=search_type_str,
             ai_model_used=",".join(ai_models_used) if ai_models_used else "none",
-            result_count=len(mock_results),
+            result_count=len(search_results),
             response_time=response_time
         )
         db.add(history_record)
         db.commit()
 
-        logger.info(f"多模态搜索完成: 转换文本='{converted_text}', 结果数量={len(mock_results)}")
+        logger.info(f"多模态搜索完成: 转换文本='{converted_text}', 结果数量={len(search_results)}")
 
         return MultimodalResponse(
             data={
                 "converted_text": converted_text,
                 "confidence": confidence,
-                "search_results": [result.dict() for result in mock_results],
+                "search_results": [result.dict() for result in search_results],
                 "file_info": {
                     "filename": file.filename,
                     "size": file_size,
