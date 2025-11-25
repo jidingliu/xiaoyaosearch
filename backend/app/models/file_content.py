@@ -15,7 +15,7 @@ class FileContentModel(Base):
 
     存储文件解析后的文本内容和相关元数据
     """
-    __tablename__ = "file_contents"
+    __tablename__ = "file_content"
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键ID")
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False, unique=True, comment="关联文件ID")

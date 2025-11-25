@@ -68,6 +68,7 @@ def init_database() -> None:
         from app.models.search_history import SearchHistoryModel
         from app.models.ai_model import AIModelModel
         from app.models.index_job import IndexJobModel
+        from app.models.app_settings import AppSettingsModel
 
         # 创建所有表
         Base.metadata.create_all(bind=engine)
