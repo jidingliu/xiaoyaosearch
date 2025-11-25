@@ -15,7 +15,8 @@
       "Bash(nvidia-smi:*)",
       "Bash(./venv/Scripts/pip.exe uninstall:*)",
       "Bash(./venv/Scripts/pip.exe:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
