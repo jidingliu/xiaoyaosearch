@@ -100,49 +100,99 @@
                 <a-select-option value="OFA-Sys/chinese-clip-vit-large">ViT-Large (高精度)</a-select-option>
               </a-select>
             </a-form-item>
+            <a-form-item label="运行设备">
+              <a-select v-model:value="visionSettings.device" style="width: 200px">
+                <a-select-option value="cpu">CPU</a-select-option>
+                <a-select-option value="cuda">CUDA (GPU)</a-select-option>
+              </a-select>
+            </a-form-item>
           </a-form>
         </div>
         <div class="settings-section">
           <a-space>
-            <a-button type="primary" @click="testVision">测试模型</a-button>
+            <a-button type="primary" @click="testVision">检测可用性</a-button>
             <a-button @click="saveVisionSettings">保存设置</a-button>
           </a-space>
         </div>
       </a-tab-pane>
 
-      <!-- 搜索设置 -->
-      <a-tab-pane key="search" tab="搜索设置">
+      <!-- 内嵌模型设置 -->
+      <a-tab-pane key="embedding" tab="内嵌模型">
         <div class="settings-section">
-          <h3>搜索参数配置</h3>
+          <h3>文本内嵌模型配置</h3>
           <a-form layout="vertical">
-            <a-form-item label="默认搜索类型">
-              <a-select v-model:value="searchSettings.defaultType" style="width: 200px">
-                <a-select-option value="semantic">语义搜索</a-select-option>
-                <a-select-option value="fulltext">全文搜索</a-select-option>
-                <a-select-option value="hybrid">混合搜索</a-select-option>
+            <a-form-item label="文本内嵌模型">
+              <a-alert
+                message="本地BGE-M3模型"
+                description="使用本地部署的BGE-M3模型生成文本向量嵌入"
+                type="info"
+                show-icon
+              />
+            </a-form-item>
+
+            <a-form-item label="模型版本">
+              <a-select v-model:value="embeddingSettings.modelName" style="width: 100%">
+                <a-select-option value="BAAI/bge-m3">BGE-M3 (多语言)</a-select-option>
+                <a-select-option value="BAAI/bge-large-zh-v1.5">BGE-Large-zh</a-select-option>
+                <a-select-option value="BAAI/bge-small-zh-v1.5">BGE-Small-zh</a-select-option>
               </a-select>
             </a-form-item>
-            <a-form-item label="默认相似度阈值">
+            <a-form-item label="运行设备">
+              <a-select v-model:value="embeddingSettings.device" style="width: 200px">
+                <a-select-option value="cpu">CPU</a-select-option>
+                <a-select-option value="cuda">CUDA (GPU)</a-select-option>
+              </a-select>
+            </a-form-item>
+            <a-form-item>
+              <a-space>
+                <a-button type="primary" @click="testEmbedding">检测可用性</a-button>
+                <a-button @click="saveEmbeddingSettings">保存设置</a-button>
+              </a-space>
+            </a-form-item>
+          </a-form>
+        </div>
+      </a-tab-pane>
+
+      <!-- 通用设置 -->
+      <a-tab-pane key="general" tab="通用设置">
+        <div class="settings-section">
+          <h3>搜索设置</h3>
+          <a-form layout="vertical">
+            <a-form-item label="默认返回结果数">
               <a-slider
-                v-model:value="searchSettings.defaultThreshold"
+                v-model:value="generalSettings.defaultResults"
+                :min="10"
+                :max="100"
+                :step="10"
+                :marks="{ 10: '10', 50: '50', 100: '100' }"
+              />
+            </a-form-item>
+            <a-form-item label="相似度阈值">
+              <a-slider
+                v-model:value="generalSettings.threshold"
                 :min="0"
                 :max="1"
                 :step="0.1"
-                :tooltip-formatter="(value: number) => `${(value * 100).toFixed(0)}%`"
+                :tooltip-formatter="(value) => `${(value * 100).toFixed(0)}%`"
               />
             </a-form-item>
-            <a-form-item label="默认结果数量">
+            <a-form-item label="最大文件大小">
               <a-input-number
-                v-model:value="searchSettings.defaultLimit"
-                :min="1"
+                v-model:value="generalSettings.maxFileSize"
+                :min="10"
                 :max="100"
+                addon-after="MB"
                 style="width: 200px"
               />
             </a-form-item>
           </a-form>
         </div>
+
         <div class="settings-section">
-          <a-button type="primary" @click="saveSearchSettings">保存设置</a-button>
+          <a-space>
+            <a-button type="primary" @click="saveGeneralSettings">保存设置</a-button>
+            <a-button @click="resetSettings">重置默认</a-button>
+          </a-space>
         </div>
       </a-tab-pane>
     </a-tabs>
@@ -151,14 +201,14 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 
 // 响应式数据
 const activeTab = ref('speech')
 
 // 语音设置
 const speechSettings = reactive({
-  modelSize: 'base',
+  modelSize: 'small',
   device: 'cpu'
 })
 
@@ -170,14 +220,21 @@ const llmSettings = reactive({
 
 // 视觉模型设置
 const visionSettings = reactive({
-  clipModel: 'OFA-Sys/chinese-clip-vit-base'
+  clipModel: 'OFA-Sys/chinese-clip-vit-base',
+  device: 'cpu'
 })
 
-// 搜索设置
-const searchSettings = reactive({
-  defaultType: 'hybrid',
-  defaultThreshold: 0.7,
-  defaultLimit: 20
+// 内嵌模型设置
+const embeddingSettings = reactive({
+  modelName: 'BAAI/bge-m3',
+  device: 'cpu'
+})
+
+// 通用设置
+const generalSettings = reactive({
+  defaultResults: 20,
+  threshold: 0.7,
+  maxFileSize: 50
 })
 
 // 方法
@@ -187,19 +244,27 @@ const saveSpeechSettings = () => {
 }
 
 const testSpeechAvailability = () => {
-  message.info('检查语音识别服务可用性...')
-  // 这里应该调用实际的API检查
-  setTimeout(() => {
-    message.success('语音识别服务可用')
-  }, 1000)
+  message.info('语音服务可用性检查功能开发中...')
 }
 
+const saveGeneralSettings = () => {
+  localStorage.setItem('generalSettings', JSON.stringify(generalSettings))
+  message.success('通用设置已保存')
+}
+
+const resetSettings = () => {
+  Modal.confirm({
+    title: '确认重置',
+    content: '确定要重置所有设置为默认值吗？',
+    onOk() {
+      message.success('设置已重置')
+    }
+  })
+}
+
+// 大语言模型方法
 const testLLM = () => {
-  message.info('测试大语言模型连接...')
-  // 这里应该调用实际的API测试
-  setTimeout(() => {
-    message.success('大语言模型连接正常')
-  }, 1500)
+  message.info('LLM连接测试功能开发中...')
 }
 
 const saveLLMSettings = () => {
@@ -207,12 +272,9 @@ const saveLLMSettings = () => {
   message.success('大语言模型设置已保存')
 }
 
+// 视觉模型方法
 const testVision = () => {
-  message.info('测试视觉模型...')
-  // 这里应该调用实际的API测试
-  setTimeout(() => {
-    message.success('视觉模型可用')
-  }, 1200)
+  message.info('视觉服务可用性检查功能开发中...')
 }
 
 const saveVisionSettings = () => {
@@ -220,10 +282,16 @@ const saveVisionSettings = () => {
   message.success('视觉模型设置已保存')
 }
 
-const saveSearchSettings = () => {
-  localStorage.setItem('searchSettings', JSON.stringify(searchSettings))
-  message.success('搜索设置已保存')
+// 内嵌模型方法
+const testEmbedding = () => {
+  message.info('BGE模型可用性检查功能开发中...')
 }
+
+const saveEmbeddingSettings = () => {
+  localStorage.setItem('embeddingSettings', JSON.stringify(embeddingSettings))
+  message.success('内嵌模型设置已保存')
+}
+
 </script>
 
 <style scoped>
@@ -234,43 +302,46 @@ const saveSearchSettings = () => {
 }
 
 .settings-header {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-8);
 }
 
 .settings-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
   margin: 0 0 var(--space-2);
   color: var(--text-primary);
 }
 
 .settings-header p {
-  color: var(--text-secondary);
   margin: 0;
+  color: var(--text-secondary);
 }
 
 .settings-tabs {
   background: var(--surface-01);
   border-radius: var(--radius-xl);
-  padding: var(--space-6);
   box-shadow: var(--shadow-base);
+  overflow: hidden;
 }
 
 .settings-section {
-  margin-bottom: var(--space-6);
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
 }
 
 .settings-section h3 {
-  font-size: 1.125rem;
-  font-weight: 600;
   margin: 0 0 var(--space-4);
   color: var(--text-primary);
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 .form-help {
-  font-size: 0.875rem;
+  margin-left: var(--space-2);
   color: var(--text-tertiary);
-  margin-top: var(--space-1);
+  font-size: 0.875rem;
 }
 
 /* 响应式设计 */
@@ -279,7 +350,7 @@ const saveSearchSettings = () => {
     padding: var(--space-4);
   }
 
-  .settings-tabs {
+  .settings-section {
     padding: var(--space-4);
   }
 }

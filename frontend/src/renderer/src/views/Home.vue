@@ -134,9 +134,9 @@
             <a-col :span="8">
               <a-form-item label="搜索类型">
                 <a-select v-model:value="searchOptions.searchType" style="width: 100%">
-                  <a-select-option value="semantic">语义搜索</a-select-option>
-                  <a-select-option value="fulltext">全文搜索</a-select-option>
-                  <a-select-option value="hybrid">混合搜索</a-select-option>
+                  <a-select value="semantic">语义搜索</a-select>
+                  <a-select value="fulltext">全文搜索</a-select>
+                  <a-select value="hybrid">混合搜索</a-select>
                 </a-select>
               </a-form-item>
             </a-col>
@@ -147,10 +147,10 @@
                   mode="multiple"
                   style="width: 100%"
                 >
-                  <a-select-option value="document">文档</a-select-option>
-                  <a-select-option value="audio">音频</a-select-option>
-                  <a-select-option value="video">视频</a-select-option>
-                  <a-select-option value="image">图片</a-select-option>
+                  <a-select value="document">文档</a-select>
+                  <a-select value="audio">音频</a-select>
+                  <a-select value="video">视频</a-select>
+                  <a-select value="image">图片</a-select>
                 </a-select>
               </a-form-item>
             </a-col>
@@ -320,6 +320,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
+import { SearchServiceMock } from '@/api/search'
 import type { SearchResult, SearchType, FileType } from '@/types/api'
 import SearchResultCard from '@/components/SearchResultCard.vue'
 import {
@@ -417,44 +418,21 @@ const handleSearch = async () => {
   hasSearched.value = true
 
   try {
-    // 模拟搜索API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const response = await SearchServiceMock.search({
+      query: searchQuery.value,
+      search_type: searchOptions.searchType,
+      threshold: searchOptions.threshold,
+      file_types: searchOptions.fileTypes,
+      limit: 20
+    })
 
-    // 模拟搜索结果
-    const mockResults: SearchResult[] = [
-      {
-        file_id: 1,
-        file_name: '技术方案文档.md',
-        file_path: 'D:\\Documents\\Projects\\技术方案文档.md',
-        file_type: 'document',
-        relevance_score: 0.95,
-        preview_text: '这是一个关于小遥搜索技术方案的文档，包含了详细的架构设计和实现细节...',
-        highlight: '这是一个关于<em>小遥搜索</em>技术方案的文档，包含了详细的架构设计和实现细节...',
-        created_at: '2024-01-15T10:30:00Z',
-        modified_at: '2024-01-20T15:45:00Z',
-        file_size: 1024000,
-        match_type: 'semantic'
-      },
-      {
-        file_id: 2,
-        file_name: '项目需求文档.pdf',
-        file_path: 'D:\\Documents\\Projects\\项目需求文档.pdf',
-        file_type: 'document',
-        relevance_score: 0.87,
-        preview_text: '产品需求文档，详细描述了小遥搜索的功能特性和用户需求...',
-        highlight: '产品需求文档，详细描述了<em>小遥搜索</em>的功能特性和用户需求...',
-        created_at: '2024-01-10T09:15:00Z',
-        modified_at: '2024-01-18T14:20:00Z',
-        file_size: 2048000,
-        match_type: 'hybrid'
-      }
-    ]
+    if (response.success) {
+      searchResults.value = response.data.results
+      searchStats.total = response.data.total
+      searchStats.searchTime = response.data.search_time
 
-    searchResults.value = mockResults
-    searchStats.total = mockResults.length
-    searchStats.searchTime = 1.5
-
-    message.success(`找到 ${mockResults.length} 个相关文件`)
+      message.success(`找到 ${response.data.total} 个相关文件`)
+    }
   } catch (error) {
     message.error('搜索失败，请重试')
     console.error('Search error:', error)
@@ -462,6 +440,7 @@ const handleSearch = async () => {
     isSearching.value = false
   }
 }
+
 
 // 语音录制相关
 const toggleRecording = () => {
@@ -540,8 +519,8 @@ const handleOpen = (result: SearchResult) => {
   message.success(`打开文件: ${result.file_name}`)
 }
 
-const handleFavorite = (result: SearchResult, isFavorite: boolean) => {
-  message.success(`${isFavorite ? '已收藏' : '已取消收藏'}: ${result.file_name}`)
+const handleFavorite = (result: SearchResult) => {
+  message.success(`已收藏: ${result.file_name}`)
 }
 
 const handleDelete = (result: SearchResult) => {
@@ -593,108 +572,8 @@ const formatTime = (seconds: number): string => {
 // 组件挂载
 onMounted(() => {
   // 初始化
-  message.info('欢迎使用小遥搜索 v2.0')
+  // message.info('欢迎使用小遥搜索 v2.0')
 })
-  SettingOutlined
-} from '@ant-design/icons-vue'
-
-// 响应式数据
-const isSearchFocused = ref(false)
-const searchQuery = ref('')
-const isSearching = ref(false)
-const hasSearched = ref(false)
-const showSearchOptions = ref(false)
-
-// 搜索结果
-const searchResults = ref<SearchResult[]>([])
-
-// 搜索选项
-const searchOptions = reactive({
-  searchType: 'hybrid' as SearchType,
-  threshold: 0.7
-})
-
-// 搜索统计
-const searchStats = reactive({
-  total: 0,
-  searchTime: 0
-})
-
-// 计算属性
-const canSearch = computed(() => {
-  return searchQuery.value.trim().length > 0
-})
-
-// 处理搜索
-const handleSearch = async () => {
-  if (!canSearch.value) return
-
-  isSearching.value = true
-  hasSearched.value = true
-
-  try {
-    // 模拟搜索API调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // 模拟搜索结果
-    const mockResults: SearchResult[] = [
-      {
-        file_id: 1,
-        file_name: '技术方案文档.md',
-        file_path: 'D:\\Documents\\Projects\\技术方案文档.md',
-        file_type: 'document',
-        relevance_score: 0.95,
-        preview_text: '这是一个关于小遥搜索技术方案的文档，包含了详细的架构设计和实现细节...',
-        highlight: '这是一个关于<em>小遥搜索</em>技术方案的文档，包含了详细的架构设计和实现细节...',
-        created_at: '2024-01-15T10:30:00Z',
-        modified_at: '2024-01-20T15:45:00Z',
-        file_size: 1024000,
-        match_type: 'semantic'
-      },
-      {
-        file_id: 2,
-        file_name: '项目需求文档.pdf',
-        file_path: 'D:\\Documents\\Projects\\项目需求文档.pdf',
-        file_type: 'document',
-        relevance_score: 0.87,
-        preview_text: '产品需求文档，详细描述了小遥搜索的功能特性和用户需求...',
-        highlight: '产品需求文档，详细描述了<em>小遥搜索</em>的功能特性和用户需求...',
-        created_at: '2024-01-10T09:15:00Z',
-        modified_at: '2024-01-18T14:20:00Z',
-        file_size: 2048000,
-        match_type: 'hybrid'
-      }
-    ]
-
-    searchResults.value = mockResults
-    searchStats.total = mockResults.length
-    searchStats.searchTime = 1.5
-
-    message.success(`找到 ${mockResults.length} 个相关文件`)
-  } catch (error) {
-    message.error('搜索失败，请重试')
-    console.error('Search error:', error)
-  } finally {
-    isSearching.value = false
-  }
-}
-
-// 搜索结果操作
-const handlePreview = (result: SearchResult) => {
-  message.info(`预览文件: ${result.file_name}`)
-}
-
-const handleOpen = (result: SearchResult) => {
-  message.success(`打开文件: ${result.file_name}`)
-}
-
-const handleFavorite = (result: SearchResult, isFavorite: boolean) => {
-  message.success(`${isFavorite ? '已收藏' : '已取消收藏'}: ${result.file_name}`)
-}
-
-const handleDelete = (result: SearchResult) => {
-  message.warning(`删除功能暂未实现`)
-}
 </script>
 
 <style scoped>
@@ -730,6 +609,13 @@ const handleDelete = (result: SearchResult) => {
   margin-bottom: var(--space-8);
 }
 
+.multimodal-indicators {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
 .search-container {
   position: relative;
   margin-bottom: var(--space-4);
@@ -752,6 +638,106 @@ const handleDelete = (result: SearchResult) => {
   box-shadow: 0 0 0 3px var(--primary-100);
 }
 
+.voice-input,
+.image-input {
+  text-align: center;
+  padding: var(--space-8);
+  border: 2px dashed var(--border-medium);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-01);
+}
+
+.voice-visualizer {
+  margin-bottom: var(--space-4);
+}
+
+.voice-waves {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-1);
+  height: 40px;
+}
+
+.wave {
+  width: 4px;
+  background: var(--primary-500);
+  border-radius: var(--radius-full);
+  animation: wave 1s ease-in-out infinite;
+}
+
+.wave:nth-child(1) { animation-delay: 0s; height: 20px; }
+.wave:nth-child(2) { animation-delay: 0.1s; height: 30px; }
+.wave:nth-child(3) { animation-delay: 0.2s; height: 40px; }
+.wave:nth-child(4) { animation-delay: 0.3s; height: 30px; }
+.wave:nth-child(5) { animation-delay: 0.4s; height: 20px; }
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+
+.voice-icon {
+  font-size: 3rem;
+  color: var(--text-tertiary);
+}
+
+.voice-text {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.voice-timer {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--primary-600);
+  margin-bottom: var(--space-4);
+}
+
+.voice-controls {
+  display: flex;
+  justify-content: center;
+}
+
+.image-uploader {
+  border: none !important;
+  background: transparent !important;
+}
+
+.uploaded-image {
+  margin-top: var(--space-4);
+  position: relative;
+  display: inline-block;
+}
+
+.uploaded-image img {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-lg);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.uploaded-image:hover .image-overlay {
+  opacity: 1;
+}
+
 .search-options {
   margin-top: var(--space-4);
   padding: var(--space-4);
@@ -766,30 +752,10 @@ const handleDelete = (result: SearchResult) => {
   justify-content: center;
 }
 
-.supported-formats {
-  margin-bottom: var(--space-8);
-}
-
-.formats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-}
-
-.format-category {
+.search-status {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.format-category strong {
-  color: var(--text-primary);
-}
-
-.format-category span {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+  justify-content: center;
+  gap: var(--space-3);
 }
 
 .results-section {
@@ -818,6 +784,11 @@ const handleDelete = (result: SearchResult) => {
 
 .results-list {
   min-height: 200px;
+}
+
+.results-footer {
+  text-align: center;
+  margin-top: var(--space-6);
 }
 
 .empty-state {
@@ -857,8 +828,8 @@ const handleDelete = (result: SearchResult) => {
     text-align: center;
   }
 
-  .formats-grid {
-    grid-template-columns: 1fr;
+  .multimodal-indicators {
+    gap: var(--space-2);
   }
 }
 </style>
