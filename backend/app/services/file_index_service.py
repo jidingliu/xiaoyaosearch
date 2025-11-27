@@ -198,6 +198,32 @@ class FileIndexService:
         finally:
             self.index_status['is_building'] = False
 
+    def _build_full_index_sync(self, scan_paths: List[str]) -> Dict[str, Any]:
+        """同步版本的完整索引构建
+
+        Args:
+            scan_paths: 要扫描的路径列表
+
+        Returns:
+            Dict[str, Any]: 构建结果
+        """
+        import asyncio
+
+        try:
+            # 创建新的事件循环来运行异步函数
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.build_full_index(scan_paths))
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"同步构建完整索引失败: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
     def update_incremental_index(
         self,
         scan_paths: List[str]
@@ -217,7 +243,8 @@ class FileIndexService:
             # 1. 检查索引是否存在
             if not self.index_builder.index_exists():
                 logger.info("索引不存在，执行完整索引构建")
-                return self.build_full_index(scan_paths)
+                # 直接同步调用，因为build_full_index会处理异步操作
+                return self._build_full_index_sync(scan_paths)
 
             # 2. 扫描文件变更
             all_changes = []
