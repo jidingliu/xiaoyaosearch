@@ -39,7 +39,6 @@ DOWNLOADS = [
             "https://hf-mirror.com/OFA-Sys/chinese-clip-vit-base-patch16/resolve/main/pytorch_model.bin",
             "https://hf-mirror.com/OFA-Sys/chinese-clip-vit-base-patch16/resolve/main/config.json",
             "https://hf-mirror.com/OFA-Sys/chinese-clip-vit-base-patch16/resolve/main/preprocessor_config.json",
-            "https://hf-mirror.com/OFA-Sys/chinese-clip-vit-base-patch16/resolve/main/tokenizer.json",
             "https://hf-mirror.com/OFA-Sys/chinese-clip-vit-base-patch16/resolve/main/vocab.txt"
         ],
         "target_dir": project_root / "data/models/cn-clip/OFA-Sys/chinese-clip-vit-base-patch16"

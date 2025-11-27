@@ -46,7 +46,7 @@ except ImportError as e:
     create_ollama_service = None
     OLLAMA_AVAILABLE = False
 from app.models.ai_model import AIModelModel
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,9 @@ class AIModelService:
     async def _load_model_configs_from_db(self):
         """从数据库加载模型配置"""
         try:
-            with get_db() as db:
+            # 创建数据库会话
+            db = SessionLocal()
+            try:
                 # 查询所有活跃的模型配置
                 model_configs = db.query(AIModelModel).filter(AIModelModel.is_active == True).all()
 
@@ -104,6 +106,9 @@ class AIModelService:
                     }
 
                 logger.info(f"从数据库加载了 {len(self.model_configs)} 个模型配置")
+
+            finally:
+                db.close()
 
         except Exception as e:
             logger.warning(f"从数据库加载模型配置失败: {str(e)}，使用默认配置")
@@ -165,33 +170,55 @@ class AIModelService:
     async def _create_default_models(self):
         """创建默认模型实例"""
         try:
-            # 创建BGE-M3文本嵌入模型
-            if "bge_m3_local" in self.model_configs:
-                bge_config = self.model_configs["bge_m3_local"]["config"]
-                bge_service = create_bge_service(bge_config)
-                self.model_manager.register_model("bge_m3_local", bge_service)
-                self.default_models["embedding"] = "bge_m3_local"
+            # 从数据库配置动态创建模型实例
+            for model_id, model_config in self.model_configs.items():
+                model_type = model_config["model_type"]
+                config = model_config["config"]
 
-            # 创建FasterWhisper语音识别模型
-            if "whisper_local" in self.model_configs:
-                whisper_config = self.model_configs["whisper_local"]["config"]
-                whisper_service = create_whisper_service(whisper_config)
-                self.model_manager.register_model("whisper_local", whisper_service)
-                self.default_models["speech"] = "whisper_local"
+                # 如果config是字符串，需要解析JSON
+                if isinstance(config, str):
+                    import json
+                    config = json.loads(config)
 
-            # 创建CN-CLIP图像理解模型
-            if "clip_local" in self.model_configs:
-                clip_config = self.model_configs["clip_local"]["config"]
-                clip_service = create_clip_service(clip_config)
-                self.model_manager.register_model("clip_local", clip_service)
-                self.default_models["vision"] = "clip_local"
+                try:
+                    if model_type == "embedding" and BGE_AVAILABLE:
+                        # 创建文本嵌入模型
+                        bge_service = create_bge_service(config)
+                        self.model_manager.register_model(model_id, bge_service)
+                        self.default_models["embedding"] = model_id
+                        # 立即加载模型
+                        await self.model_manager.load_model(model_id)
+                        logger.info(f"创建并加载embedding模型: {model_id}")
 
-            # 创建Ollama大语言模型
-            if "ollama_local" in self.model_configs:
-                ollama_config = self.model_configs["ollama_local"]["config"]
-                ollama_service = create_ollama_service(ollama_config)
-                self.model_manager.register_model("ollama_local", ollama_service)
-                self.default_models["llm"] = "ollama_local"
+                    elif model_type == "speech" and WHISPER_AVAILABLE:
+                        # 创建语音识别模型
+                        whisper_service = create_whisper_service(config)
+                        self.model_manager.register_model(model_id, whisper_service)
+                        self.default_models["speech"] = model_id
+                        # 立即加载模型
+                        await self.model_manager.load_model(model_id)
+                        logger.info(f"创建并加载speech模型: {model_id}")
+
+                    elif model_type == "vision" and CLIP_AVAILABLE:
+                        # 创建图像理解模型
+                        clip_service = create_clip_service(config)
+                        self.model_manager.register_model(model_id, clip_service)
+                        self.default_models["vision"] = model_id
+                        # 立即加载模型
+                        await self.model_manager.load_model(model_id)
+                        logger.info(f"创建并加载vision模型: {model_id}")
+
+                    elif model_type == "llm" and OLLAMA_AVAILABLE:
+                        # 创建大语言模型
+                        ollama_service = create_ollama_service(config)
+                        self.model_manager.register_model(model_id, ollama_service)
+                        self.default_models["llm"] = model_id
+                        # 立即加载模型
+                        await self.model_manager.load_model(model_id)
+                        logger.info(f"创建并加载llm模型: {model_id}")
+
+                except Exception as model_error:
+                    logger.warning(f"创建{model_type}模型失败 ({model_id}): {str(model_error)}")
 
             logger.info(f"创建了 {len(self.model_manager.models)} 个默认模型实例")
 

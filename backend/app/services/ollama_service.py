@@ -69,6 +69,9 @@ class OllamaLLMService(BaseAIModel):
         }
 
         if config:
+            # 处理配置字段兼容性
+            if "model" in config and "model_name" not in config:
+                config["model_name"] = config["model"]
             default_config.update(config)
 
         super().__init__(

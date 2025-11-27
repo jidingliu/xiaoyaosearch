@@ -41,21 +41,30 @@ async def update_ai_model_config(
         # TODO: 实现模型配置验证
         # validate_model_config(request.model_type, request.provider, request.config)
 
-        # 检查是否已存在相同模型配置
+        # 检查是否已存在相同模型类型的配置（按model_type更新，而不是按model_name）
+        model_type_value = get_enum_value(request.model_type)
+        logger.info(f"查找模型类型: {model_type_value} (原始: {request.model_type})")
+
         existing_model = db.query(AIModelModel).filter(
-            AIModelModel.model_type == get_enum_value(request.model_type),
-            AIModelModel.provider == get_enum_value(request.provider),
-            AIModelModel.model_name == request.model_name,
+            AIModelModel.model_type == model_type_value,
             AIModelModel.is_active == True
         ).first()
 
+        logger.info(f"查询结果: {existing_model}")
         if existing_model:
-            # 更新现有配置
+            logger.info(f"找到现有模型: ID={existing_model.id}, 名称={existing_model.model_name}")
+        else:
+            logger.info("未找到现有模型，将创建新的")
+
+        if existing_model:
+            # 更新现有配置（包括model_name和provider）
+            existing_model.model_name = request.model_name
+            existing_model.provider = get_enum_value(request.provider)
             existing_model.config_json = json.dumps(request.config, ensure_ascii=False)
             existing_model.updated_at = datetime.utcnow()
             db.commit()
             model_id = existing_model.id
-            logger.info(f"更新现有AI模型配置: id={model_id}")
+            logger.info(f"更新现有AI模型配置: id={model_id}, model_type={request.model_type}, new_name={request.model_name}")
         else:
             # 创建新配置
             new_model = AIModelModel(
@@ -203,31 +212,42 @@ async def test_ai_model(
                     test_message = "文本嵌入模型测试失败：无法生成嵌入向量"
 
             elif is_speech_model(model_config.model_type):
-                # 测试语音识别模型（使用模拟音频数据）
-                test_audio = b"mock_audio_data_for_testing"  # 模拟音频数据
+                # 测试语音识别模型（使用真实音频文件）
+                test_audio_path = "../data/test-data/test.mp3"  # 真实音频文件路径
                 try:
+                    # 读取音频文件
+                    with open(test_audio_path, 'rb') as f:
+                        test_audio = f.read()
+
                     speech_result = await ai_model_service.speech_to_text(test_audio)
                     if speech_result and "text" in speech_result:
                         test_passed = True
+                        recognized_text = speech_result.get("text", "")
                         confidence = speech_result.get("avg_confidence", 0)
-                        test_message = f"语音识别模型测试成功，置信度: {confidence:.2f}"
+                        # 限制识别文本长度显示
+                        text_preview = recognized_text[:50] + "..." if len(recognized_text) > 50 else recognized_text
+                        test_message = f"语音识别模型测试成功，识别文本: '{text_preview}'，置信度: {confidence:.2f}"
                     else:
                         test_passed = False
                         test_message = "语音识别模型测试失败：无法识别音频"
+                except FileNotFoundError:
+                    test_passed = False
+                    test_message = f"语音识别模型测试失败：音频文件不存在 {test_audio_path}"
                 except Exception as e:
                     test_passed = False
                     test_message = f"语音识别模型测试失败：{str(e)}"
 
             elif is_vision_model(model_config.model_type):
-                # 测试图像理解模型（使用模拟图像数据）
-                test_image = b"mock_image_data_for_testing"  # 模拟图像数据
-                test_texts = ["描述这张图片的内容", "这张图片展示了什么"]
+                # 测试图像理解模型（使用真实图片文件）
+                test_image_path = "../data/test-data/pokemon.jpeg"  # 真实图片文件路径
+                test_texts = ["描述这张图片的内容", "这张图片展示了什么", "这是一张宝可梦图片"]
                 try:
-                    vision_result = await ai_model_service.image_understanding(test_image, test_texts)
+                    vision_result = await ai_model_service.image_understanding(test_image_path, test_texts)
                     if vision_result and "best_match" in vision_result:
                         test_passed = True
                         similarity = vision_result["best_match"].get("similarity", 0)
-                        test_message = f"图像理解模型测试成功，相似度: {similarity:.2f}"
+                        best_text = vision_result["best_match"].get("text", "")
+                        test_message = f"图像理解模型测试成功，最佳匹配: '{best_text}'，相似度: {similarity:.4f}"
                     else:
                         test_passed = False
                         test_message = "图像理解模型测试失败：无法理解图像"
@@ -240,10 +260,18 @@ async def test_ai_model(
                 test_message = "你好，请介绍一下你自己"
                 try:
                     llm_result = await ai_model_service.text_generation(test_message)
-                    if llm_result and "text" in llm_result:
+                    # 检查可能的返回字段：content 或 text
+                    generated_text = None
+                    if llm_result:
+                        if "content" in llm_result:
+                            generated_text = llm_result["content"]
+                        elif "text" in llm_result:
+                            generated_text = llm_result["text"]
+
+                    if generated_text:
                         test_passed = True
-                        generated_text = llm_result["text"][:100]  # 只取前100字符
-                        test_message = f"大语言模型测试成功，生成内容: {generated_text}..."
+                        generated_text_preview = generated_text[:100]  # 只取前100字符
+                        test_message = f"大语言模型测试成功，生成内容: {generated_text_preview}..."
                     else:
                         test_passed = False
                         test_message = "大语言模型测试失败：无法生成文本"

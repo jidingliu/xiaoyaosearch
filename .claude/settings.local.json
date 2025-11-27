@@ -30,7 +30,11 @@
       "Bash(find:*)",
       "Bash(./venv/Scripts/pytest.exe:*)",
       "Bash(npm install:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(git rm:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npm run preview:*)",
+      "Bash(npx vite:*)"
     ],
     "deny": [],
     "ask": []

@@ -77,7 +77,7 @@ class AIModelModel(Base):
                 "provider": "local",
                 "model_name": "BAAI/bge-m3",
                 "config": {
-                    "model_path": "BAAI/bge-m3",
+                    "model_path": "embedding/BAAI/bge-m3",
                     "device": "cpu",
                     "embedding_dim": 768,
                     "max_length": 8192,
@@ -87,8 +87,9 @@ class AIModelModel(Base):
             "faster_whisper_local": {
                 "model_type": "speech",
                 "provider": "local",
-                "model_name": "faster-whisper",
+                "model_name": "Systran/faster-whisper-base",
                 "config": {
+                    "model_path": "faster-whisper/Systran/faster-whisper-base",
                     "model_size": "base",
                     "compute_type": "auto",
                     "device": "cpu",
@@ -100,19 +101,20 @@ class AIModelModel(Base):
                 "provider": "local",
                 "model_name": "OFA-Sys/chinese-clip-vit-base-patch16",
                 "config": {
-                    "model_path": "OFA-Sys/chinese-clip-vit-base-patch16",
+                    "model_path": "cn-clip/OFA-Sys/chinese-clip-vit-base-patch16",
                     "device": "cpu"
                 }
             },
-            "qwen_cloud": {
+            "ollama_local": {
                 "model_type": "llm",
-                "provider": "cloud",
-                "model_name": "qwen-turbo",
+                "provider": "local",
+                "model_name": "qwen2.5:1.5b",
                 "config": {
-                    "provider": "aliyun",
-                    "api_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    "base_url": "http://localhost:11434",
+                    "model": "qwen2.5:1.5b",
+                    "temperature": 0.7,
                     "max_tokens": 2000,
-                    "temperature": 0.7
+                    "timeout": 30
                 }
             }
         }
