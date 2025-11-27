@@ -200,97 +200,351 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
+import { SettingsServiceMock } from '@/api/settings'
 
 // 响应式数据
 const activeTab = ref('speech')
+const isLoading = ref(false)
 
-// 语音设置
+// 系统设置状态
+const systemSettings = reactive({
+  search: {
+    default_results: 20,
+    similarity_threshold: 0.7,
+    max_file_size: 50
+  },
+  ai_models: {} as any,
+  system_status: 'healthy' as 'healthy' | 'degraded' | 'unhealthy',
+  last_updated: ''
+})
+
+// 可用的AI模型列表
+const availableModels = ref<any[]>([])
+
+// 语音设置（从系统设置中提取）
 const speechSettings = reactive({
   modelSize: 'small',
-  device: 'cpu'
+  device: 'cpu',
+  enabled: true
 })
 
-// 大语言模型设置
+// 大语言模型设置（从系统设置中提取）
 const llmSettings = reactive({
   localModel: 'qwen2.5:1.5b',
-  ollamaUrl: 'http://localhost:11434'
+  ollamaUrl: 'http://localhost:11434',
+  enabled: true
 })
 
-// 视觉模型设置
+// 视觉模型设置（从系统设置中提取）
 const visionSettings = reactive({
   clipModel: 'OFA-Sys/chinese-clip-vit-base',
-  device: 'cpu'
+  device: 'cpu',
+  enabled: true
 })
 
-// 内嵌模型设置
+// 内嵌模型设置（从系统设置中提取）
 const embeddingSettings = reactive({
   modelName: 'BAAI/bge-m3',
-  device: 'cpu'
+  device: 'cpu',
+  enabled: true
 })
 
-// 通用设置
+// 通用设置（从系统设置中提取）
 const generalSettings = reactive({
   defaultResults: 20,
   threshold: 0.7,
   maxFileSize: 50
 })
 
-// 方法
-const saveSpeechSettings = () => {
-  localStorage.setItem('speechSettings', JSON.stringify(speechSettings))
-  message.success('语音设置已保存')
+// 数据获取方法
+const loadSystemSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await SettingsServiceMock.getSettings()
+    if (response.success) {
+      Object.assign(systemSettings, response.data)
+      updateLocalSettingsFromSystem()
+    }
+  } catch (error) {
+    console.error('加载系统设置失败:', error)
+    message.error('加载系统设置失败')
+  } finally {
+    isLoading.value = false
+  }
 }
 
-const testSpeechAvailability = () => {
-  message.info('语音服务可用性检查功能开发中...')
+const loadAvailableModels = async () => {
+  try {
+    const response = await SettingsServiceMock.getAvailableModels()
+    if (response.success) {
+      availableModels.value = response.data.models
+    }
+  } catch (error) {
+    console.error('加载可用模型失败:', error)
+  }
 }
 
-const saveGeneralSettings = () => {
-  localStorage.setItem('generalSettings', JSON.stringify(generalSettings))
-  message.success('通用设置已保存')
+const updateLocalSettingsFromSystem = () => {
+  // 从系统设置中更新本地设置状态
+  if (systemSettings.search) {
+    generalSettings.defaultResults = systemSettings.search.default_results
+    generalSettings.threshold = systemSettings.search.similarity_threshold
+    generalSettings.maxFileSize = systemSettings.search.max_file_size
+  }
+
+  // 更新AI模型设置
+  if (systemSettings.ai_models) {
+    // 语音识别模型
+    if (systemSettings.ai_models.whisper) {
+      speechSettings.modelSize = systemSettings.ai_models.whisper.model_size || 'small'
+      speechSettings.device = systemSettings.ai_models.whisper.device || 'cpu'
+      speechSettings.enabled = systemSettings.ai_models.whisper.enabled !== false
+    }
+
+    // 大语言模型
+    if (systemSettings.ai_models.ollama) {
+      llmSettings.localModel = systemSettings.ai_models.ollama.local_model || 'qwen2.5:1.5b'
+      llmSettings.ollamaUrl = systemSettings.ai_models.ollama.ollama_url || 'http://localhost:11434'
+      llmSettings.enabled = systemSettings.ai_models.ollama.enabled !== false
+    }
+
+    // 视觉模型
+    if (systemSettings.ai_models.clip) {
+      visionSettings.clipModel = systemSettings.ai_models.clip.model_name || 'OFA-Sys/chinese-clip-vit-base'
+      visionSettings.device = systemSettings.ai_models.clip.device || 'cpu'
+      visionSettings.enabled = systemSettings.ai_models.clip.enabled !== false
+    }
+
+    // 内嵌模型
+    if (systemSettings.ai_models.bge) {
+      embeddingSettings.modelName = systemSettings.ai_models.bge.model_name || 'BAAI/bge-m3'
+      embeddingSettings.device = systemSettings.ai_models.bge.device || 'cpu'
+      embeddingSettings.enabled = systemSettings.ai_models.bge.enabled !== false
+    }
+  }
+}
+
+// 设置操作方法
+const saveSpeechSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await SettingsServiceMock.updateAIModel('whisper', {
+      model_size: speechSettings.modelSize,
+      device: speechSettings.device,
+      enabled: speechSettings.enabled
+    })
+
+    if (response.success) {
+      message.success('语音设置已保存')
+      await loadSystemSettings()
+    } else {
+      message.error(response.error?.message || '保存语音设置失败')
+    }
+  } catch (error) {
+    console.error('保存语音设置失败:', error)
+    message.error('保存语音设置失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const testSpeechAvailability = async () => {
+  try {
+    const response = await SettingsServiceMock.testAIModel('whisper')
+    if (response.success) {
+      if (response.data.available) {
+        message.success(`语音服务可用 - 版本: ${response.data.version || 'unknown'}, 状态: ${response.data.status}`)
+      } else {
+        message.error('语音服务不可用')
+      }
+    } else {
+      message.error(response.error?.message || '语音服务测试失败')
+    }
+  } catch (error) {
+    console.error('测试语音服务失败:', error)
+    message.error('测试语音服务失败')
+  }
+}
+
+const saveGeneralSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await SettingsServiceMock.updateSystemSettings({
+      search: {
+        default_results: generalSettings.defaultResults,
+        similarity_threshold: generalSettings.threshold,
+        max_file_size: generalSettings.maxFileSize
+      }
+    })
+
+    if (response.success) {
+      message.success('通用设置已保存')
+      await loadSystemSettings()
+    } else {
+      message.error(response.error?.message || '保存通用设置失败')
+    }
+  } catch (error) {
+    console.error('保存通用设置失败:', error)
+    message.error('保存通用设置失败')
+  } finally {
+    isLoading.value = false
+  }
 }
 
 const resetSettings = () => {
   Modal.confirm({
     title: '确认重置',
     content: '确定要重置所有设置为默认值吗？',
-    onOk() {
-      message.success('设置已重置')
+    async onOk() {
+      try {
+        const response = await SettingsServiceMock.resetSystemSettings()
+        if (response.success) {
+          message.success('设置已重置')
+          await loadSystemSettings()
+        } else {
+          message.error(response.error?.message || '重置设置失败')
+        }
+      } catch (error) {
+        console.error('重置设置失败:', error)
+        message.error('重置设置失败')
+      }
     }
   })
 }
 
 // 大语言模型方法
-const testLLM = () => {
-  message.info('LLM连接测试功能开发中...')
+const testLLM = async () => {
+  try {
+    const response = await SettingsServiceMock.testAIModel('ollama')
+    if (response.success) {
+      if (response.data.available) {
+        message.success(`LLM服务可用 - 版本: ${response.data.version || 'unknown'}, 状态: ${response.data.status}`)
+      } else {
+        message.error('LLM服务不可用')
+      }
+    } else {
+      message.error(response.error?.message || 'LLM连接测试失败')
+    }
+  } catch (error) {
+    console.error('测试LLM服务失败:', error)
+    message.error('测试LLM服务失败')
+  }
 }
 
-const saveLLMSettings = () => {
-  localStorage.setItem('llmSettings', JSON.stringify(llmSettings))
-  message.success('大语言模型设置已保存')
+const saveLLMSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await SettingsServiceMock.updateAIModel('ollama', {
+      local_model: llmSettings.localModel,
+      ollama_url: llmSettings.ollamaUrl,
+      enabled: llmSettings.enabled
+    })
+
+    if (response.success) {
+      message.success('大语言模型设置已保存')
+      await loadSystemSettings()
+    } else {
+      message.error(response.error?.message || '保存大语言模型设置失败')
+    }
+  } catch (error) {
+    console.error('保存大语言模型设置失败:', error)
+    message.error('保存大语言模型设置失败')
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // 视觉模型方法
-const testVision = () => {
-  message.info('视觉服务可用性检查功能开发中...')
+const testVision = async () => {
+  try {
+    const response = await SettingsServiceMock.testAIModel('clip')
+    if (response.success) {
+      if (response.data.available) {
+        message.success(`视觉服务可用 - 版本: ${response.data.version || 'unknown'}, 状态: ${response.data.status}`)
+      } else {
+        message.error('视觉服务不可用')
+      }
+    } else {
+      message.error(response.error?.message || '视觉服务测试失败')
+    }
+  } catch (error) {
+    console.error('测试视觉服务失败:', error)
+    message.error('测试视觉服务失败')
+  }
 }
 
-const saveVisionSettings = () => {
-  localStorage.setItem('visionSettings', JSON.stringify(visionSettings))
-  message.success('视觉模型设置已保存')
+const saveVisionSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await SettingsServiceMock.updateAIModel('clip', {
+      model_name: visionSettings.clipModel,
+      device: visionSettings.device,
+      enabled: visionSettings.enabled
+    })
+
+    if (response.success) {
+      message.success('视觉模型设置已保存')
+      await loadSystemSettings()
+    } else {
+      message.error(response.error?.message || '保存视觉模型设置失败')
+    }
+  } catch (error) {
+    console.error('保存视觉模型设置失败:', error)
+    message.error('保存视觉模型设置失败')
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // 内嵌模型方法
-const testEmbedding = () => {
-  message.info('BGE模型可用性检查功能开发中...')
+const testEmbedding = async () => {
+  try {
+    const response = await SettingsServiceMock.testAIModel('bge')
+    if (response.success) {
+      if (response.data.available) {
+        message.success(`BGE服务可用 - 版本: ${response.data.version || 'unknown'}, 状态: ${response.data.status}`)
+      } else {
+        message.error('BGE服务不可用')
+      }
+    } else {
+      message.error(response.error?.message || 'BGE模型测试失败')
+    }
+  } catch (error) {
+    console.error('测试BGE服务失败:', error)
+    message.error('测试BGE服务失败')
+  }
 }
 
-const saveEmbeddingSettings = () => {
-  localStorage.setItem('embeddingSettings', JSON.stringify(embeddingSettings))
-  message.success('内嵌模型设置已保存')
+const saveEmbeddingSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await SettingsServiceMock.updateAIModel('bge', {
+      model_name: embeddingSettings.modelName,
+      device: embeddingSettings.device,
+      enabled: embeddingSettings.enabled
+    })
+
+    if (response.success) {
+      message.success('内嵌模型设置已保存')
+      await loadSystemSettings()
+    } else {
+      message.error(response.error?.message || '保存内嵌模型设置失败')
+    }
+  } catch (error) {
+    console.error('保存内嵌模型设置失败:', error)
+    message.error('保存内嵌模型设置失败')
+  } finally {
+    isLoading.value = false
+  }
 }
+
+// 组件挂载时加载数据
+onMounted(() => {
+  loadSystemSettings()
+  loadAvailableModels()
+})
 
 </script>
 
