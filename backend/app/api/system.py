@@ -52,9 +52,9 @@ async def health_check(db: Session = Depends(get_db)):
         # 获取真实的索引状态
         indexes_status = {}
         try:
-            # 获取搜索服务实例
-            from app.services.search_service import get_search_service
-            search_service = get_search_service()
+            # 获取分块搜索服务实例
+            from app.services.chunk_search_service import get_chunk_search_service
+            search_service = get_chunk_search_service()
             index_info = search_service.get_index_info()
 
             # 转换索引状态格式

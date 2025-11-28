@@ -8,6 +8,7 @@ from app.models.search_history import SearchHistoryModel
 from app.models.ai_model import AIModelModel
 from app.models.index_job import IndexJobModel
 from app.models.file_content import FileContentModel
+from app.models.file_chunk import FileChunkModel
 from app.models.app_settings import AppSettingsModel
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "AIModelModel",
     "IndexJobModel",
     "FileContentModel",
+    "FileChunkModel",
     "AppSettingsModel"
 ]

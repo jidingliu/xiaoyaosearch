@@ -289,8 +289,15 @@ class FileModel(Base):
             '.rs': 'text/x-rust',
         }
 
+    # 分块相关字段（通过迁移脚本添加）
+    # is_chunked = Column(Boolean, default=False, comment="是否已分块处理")
+    # total_chunks = Column(Integer, default=1, comment="总分块数")
+    # chunk_strategy = Column(String(50), default='500+50', comment="分块策略")
+    # avg_chunk_size = Column(Integer, default=500, comment="平均分块大小")
+
     # 关联关系
     content = relationship("FileContentModel", back_populates="file", uselist=False)
+    chunks = relationship("FileChunkModel", back_populates="file", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         """模型字符串表示"""

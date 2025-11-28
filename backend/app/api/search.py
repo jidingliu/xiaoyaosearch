@@ -20,7 +20,7 @@ from app.utils.enum_helpers import get_enum_value, is_semantic_search, is_hybrid
 # AI模型服务导入状态
 AI_MODEL_SERVICE_AVAILABLE = False
 ai_model_service = None
-from app.services.search_service import get_search_service
+from app.services.chunk_search_service import get_chunk_search_service
 
 router = APIRouter(prefix="/api/search", tags=["搜索服务"])
 logger = get_logger(__name__)
@@ -59,8 +59,8 @@ async def search_files(
     logger.info(f"收到搜索请求: query='{request.query}', type={search_type_str}")
 
     try:
-        # 获取搜索服务
-        search_service = get_search_service()
+        # 获取分块搜索服务
+        search_service = get_chunk_search_service()
 
         # 检查搜索服务是否就绪
         if not search_service.is_ready():
@@ -78,29 +78,30 @@ async def search_files(
                 message="搜索服务未就绪"
             )
 
-        # 执行真正的搜索
-        search_result = await search_service.search(
+        # 执行分块搜索
+        search_result_data = await search_service.search(
             query=request.query,
-            search_type=search_type_str,  # 使用转换后的字符串
+            search_type=request.search_type,  # 直接使用SearchType枚举
             limit=request.limit,
             offset=0,
             threshold=request.threshold,
             filters=request.file_types
         )
 
-        # 转换搜索结果为SearchResult格式
+        # 处理搜索结果数据格式（适配ChunkSearchService的响应格式）
+        search_result = search_result_data.get('data', {})
         results = []
         for item in search_result.get('results', []):
             search_result_item = SearchResult(
-                file_id=item.get('id', 0),
+                file_id=item.get('file_id', 0),
                 file_name=item.get('file_name', ''),
                 file_path=item.get('file_path', ''),
                 file_type=item.get('file_type', ''),
                 relevance_score=item.get('relevance_score', 0.0),
                 preview_text=item.get('preview_text', ''),
                 highlight=item.get('highlight', ''),
-                created_at=item.get('modified_time', ''),
-                modified_at=item.get('modified_time', ''),
+                created_at=item.get('created_at', ''),
+                modified_at=item.get('modified_at', ''),
                 file_size=item.get('file_size', 0),
                 match_type=item.get('match_type', '')
             )
@@ -115,7 +116,7 @@ async def search_files(
             ai_models_used.append("BGE-M3")
 
         # 如果是混合搜索，还有全文搜索
-        if is_hybrid_search(search_type_str):  # 使用转换后的字符串
+        if is_hybrid_search(request.search_type):
             ai_models_used.append("Whoosh")
 
         # 保存搜索历史
@@ -236,8 +237,8 @@ async def multimodal_search(
                 await ai_model_service.text_embedding(converted_text, normalize_embeddings=True)
                 ai_models_used.append("BGE-M3")
 
-            # 执行真实的搜索
-            search_service = get_search_service()
+            # 执行分块搜索
+            search_service = get_chunk_search_service()
             if search_service.is_ready():
                 search_result = await search_service.search(
                     query=converted_text,
@@ -467,7 +468,6 @@ async def get_search_suggestions(
     logger.info(f"获取搜索建议: query='{query}', limit={limit}")
 
     try:
-        from app.services.search_service import get_search_service
         import re
         from collections import defaultdict
 
@@ -508,7 +508,7 @@ async def get_search_suggestions(
 
         # 2. 基于文件标题和关键词的建议
         try:
-            search_service = get_search_service()
+            search_service = get_chunk_search_service()
             if search_service.is_ready():
                 # 执行快速的前缀搜索，只返回标题匹配
                 prefix_results = await search_service.search(
@@ -521,7 +521,7 @@ async def get_search_suggestions(
                 )
 
                 # 从搜索结果中提取可能的建议
-                for result in prefix_results.get('results', []):
+                for result in prefix_results.get('data', {}).get('results', []):
                     if len(suggestions) >= limit:
                         break
 

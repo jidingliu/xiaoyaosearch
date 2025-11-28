@@ -36,7 +36,8 @@
       "Bash(npm run preview:*)",
       "Bash(npx vite:*)",
       "Bash(cat:*)",
-      "Bash(\".\\venv\\Scripts\\python.exe\" main.py)"
+      "Bash(\".\\venv\\Scripts\\python.exe\" main.py)",
+      "Bash(\".\\venv\\Scripts\\python.exe\" migrations/add_chunk_support.py)"
     ],
     "deny": [],
     "ask": []
