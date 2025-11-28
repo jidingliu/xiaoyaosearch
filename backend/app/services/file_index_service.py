@@ -135,7 +135,7 @@ class FileIndexService:
 
             for i, file_info in enumerate(all_files):
                 try:
-                    doc = self._process_file_to_document(file_info)
+                    doc = await self._process_file_to_document(file_info)
                     if doc:
                         documents.append(doc)
 
@@ -224,7 +224,7 @@ class FileIndexService:
                 'error': str(e)
             }
 
-    def update_incremental_index(
+    async def update_incremental_index(
         self,
         scan_paths: List[str]
     ) -> Dict[str, Any]:
@@ -272,7 +272,7 @@ class FileIndexService:
             new_documents = []
             for file_info in all_changes:
                 try:
-                    doc = self._process_file_to_document(file_info)
+                    doc = await self._process_file_to_document(file_info)
                     if doc:
                         new_documents.append(doc)
                 except Exception as e:
@@ -395,34 +395,38 @@ class FileIndexService:
                             db.flush()  # 获取ID
                             db_file = file_record
 
-                        # 创建文件内容记录
-                        if document.get('content'):
-                            content_record = FileContentModel(
-                                file_id=db_file.id,
-                                title=document.get('title', ''),
-                                content=document.get('content', ''),
-                                content_length=len(document.get('content', '')),
-                                word_count=len(document.get('content', '').split()),
-                                language=document.get('language', 'unknown'),
-                                confidence=1.0,
-                                is_parsed=True,
-                                has_error=False,
-                                parsed_at=datetime.now(),
-                                updated_at=datetime.now()
-                            )
+                        # 创建文件内容记录（即使内容为空也创建，用于跟踪处理状态）
+                        content_text = document.get('content', '')
+                        has_error = 'error' in document.get('metadata', {})
+                        error_message = document.get('metadata', {}).get('error', '') if has_error else ''
 
-                            # 检查是否已存在内容记录
-                            existing_content = db.query(FileContentModel).filter(
-                                FileContentModel.file_id == db_file.id
-                            ).first()
+                        content_record = FileContentModel(
+                            file_id=db_file.id,
+                            title=document.get('title', ''),
+                            content=content_text,
+                            content_length=len(content_text),
+                            word_count=len(content_text.split()) if content_text.strip() else 0,
+                            language=document.get('language', 'unknown'),
+                            confidence=document.get('confidence', 1.0),
+                            is_parsed=not has_error,
+                            has_error=has_error,
+                            error_message=error_message,
+                            parsed_at=datetime.now(),
+                            updated_at=datetime.now()
+                        )
 
-                            if existing_content:
-                                # 更新现有记录
-                                for key, value in content_record.__dict__.items():
-                                    if key != 'id' and not key.startswith('_'):
-                                        setattr(existing_content, key, value)
-                            else:
-                                db.add(content_record)
+                        # 检查是否已存在内容记录
+                        existing_content = db.query(FileContentModel).filter(
+                            FileContentModel.file_id == db_file.id
+                        ).first()
+
+                        if existing_content:
+                            # 更新现有记录
+                            for key, value in content_record.__dict__.items():
+                                if key != 'id' and not key.startswith('_'):
+                                    setattr(existing_content, key, value)
+                        else:
+                            db.add(content_record)
 
                         # 定期提交以避免内存占用过大
                         if (i + 1) % 10 == 0:
@@ -464,7 +468,7 @@ class FileIndexService:
             logger.warning(f"计算文件哈希失败 {file_path}: {e}")
             return ""
 
-    def _process_file_to_document(self, file_info: FileInfo) -> Optional[Dict[str, Any]]:
+    async def _process_file_to_document(self, file_info: FileInfo) -> Optional[Dict[str, Any]]:
         """将文件信息处理为索引文档
 
         Args:
@@ -479,8 +483,8 @@ class FileIndexService:
             if 'error' in metadata:
                 logger.warning(f"提取元数据失败 {file_info.path}: {metadata['error']}")
 
-            # 2. 解析内容
-            parsed_content = self.content_parser.parse_content(file_info.path)
+            # 2. 解析内容（支持异步）
+            parsed_content = await self.content_parser.parse_content(file_info.path)
             if hasattr(parsed_content, 'error') and parsed_content.error:
                 logger.warning(f"解析内容失败 {file_info.path}: {parsed_content.error}")
 

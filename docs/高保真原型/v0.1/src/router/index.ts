@@ -15,7 +15,7 @@ const router = createRouter({
     {
       path: '/settings',
       name: 'Settings',
-      component: () => import('@/views/Settings-MVP.vue'),
+      component: () => import('@/views/Settings.vue'),
       meta: {
         title: '设置 - 小遥搜索'
       }

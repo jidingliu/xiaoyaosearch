@@ -35,7 +35,8 @@
       "Bash(sqlite3:*)",
       "Bash(npm run preview:*)",
       "Bash(npx vite:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(\".\\venv\\Scripts\\python.exe\" main.py)"
     ],
     "deny": [],
     "ask": []

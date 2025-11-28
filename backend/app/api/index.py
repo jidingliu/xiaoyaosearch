@@ -105,7 +105,8 @@ async def create_index(
             run_full_index_task,
             index_job.id,
             request.folder_path,
-            request.recursive
+            request.recursive,
+            request.file_types
         )
 
         logger.info(f"索引任务已创建: id={index_job.id}")
@@ -171,7 +172,8 @@ async def update_index(
             run_incremental_index_task,
             index_job.id,
             request.folder_path,
-            request.recursive
+            request.recursive,
+            request.file_types
         )
 
         logger.info(f"增量索引任务已创建: id={index_job.id}")
@@ -602,7 +604,8 @@ async def delete_file_index(
 async def run_full_index_task(
     index_id: int,
     folder_path: str,
-    recursive: bool = True
+    recursive: bool = True,
+    file_types: Optional[List[str]] = None
 ):
     """
     执行完整索引任务（后台任务）
@@ -611,6 +614,7 @@ async def run_full_index_task(
         index_id: 索引任务ID
         folder_path: 文件夹路径
         recursive: 是否递归搜索
+        file_types: 指定文件类型过滤列表，为None时使用默认配置
     """
     logger.info(f"开始执行完整索引任务: id={index_id}, folder={folder_path}")
 
@@ -644,11 +648,43 @@ async def run_full_index_task(
                 index_job.update_progress(processed)
                 db.commit()
 
-        # 执行完整索引构建
-        result = await index_service.build_full_index(
-            scan_paths=[folder_path],
-            progress_callback=progress_callback
-        )
+        # 如果指定了文件类型过滤，创建临时的索引服务实例
+        if file_types:
+            # 将文件类型扩展名格式统一
+            filtered_extensions = set()
+            for ext in file_types:
+                if not ext.startswith('.'):
+                    ext = '.' + ext
+                filtered_extensions.add(ext.lower())
+
+            # 创建支持文件类型过滤的临时索引服务
+            faiss_path, whoosh_path = settings.get_index_paths()
+            temp_index_service = FileIndexService(
+                data_root=settings.index.data_root,
+                faiss_index_path=faiss_path,
+                whoosh_index_path=whoosh_path,
+                use_chinese_analyzer=settings.index.use_chinese_analyzer,
+                scanner_config={
+                    'max_workers': settings.index.scanner_max_workers,
+                    'max_file_size': settings.index.max_file_size,
+                    'supported_extensions': filtered_extensions
+                },
+                parser_config={
+                    'max_content_length': settings.index.max_content_length
+                }
+            )
+
+            logger.info(f"使用文件类型过滤: {filtered_extensions}")
+            result = await temp_index_service.build_full_index(
+                scan_paths=[folder_path],
+                progress_callback=progress_callback
+            )
+        else:
+            # 使用默认的索引服务
+            result = await index_service.build_full_index(
+                scan_paths=[folder_path],
+                progress_callback=progress_callback
+            )
 
         # 更新任务结果
         if result['success']:
@@ -675,7 +711,8 @@ async def run_full_index_task(
 async def run_incremental_index_task(
     index_id: int,
     folder_path: str,
-    recursive: bool = True
+    recursive: bool = True,
+    file_types: Optional[List[str]] = None
 ):
     """
     执行增量索引任务（后台任务）
@@ -684,6 +721,7 @@ async def run_incremental_index_task(
         index_id: 索引任务ID
         folder_path: 文件夹路径
         recursive: 是否递归搜索
+        file_types: 指定文件类型过滤列表，为None时使用默认配置
     """
     logger.info(f"开始执行增量索引任务: id={index_id}, folder={folder_path}")
 
@@ -705,13 +743,44 @@ async def run_incremental_index_task(
         index_job.start_job()
         db.commit()
 
-        # 获取文件索引服务
-        index_service = get_file_index_service()
+        # 如果指定了文件类型过滤，创建临时的索引服务实例
+        if file_types:
+            # 将文件类型扩展名格式统一
+            filtered_extensions = set()
+            for ext in file_types:
+                if not ext.startswith('.'):
+                    ext = '.' + ext
+                filtered_extensions.add(ext.lower())
 
-        # 执行增量索引更新
-        result = index_service.update_incremental_index(
-            scan_paths=[folder_path]
-        )
+            # 创建支持文件类型过滤的临时索引服务
+            faiss_path, whoosh_path = settings.get_index_paths()
+            temp_index_service = FileIndexService(
+                data_root=settings.index.data_root,
+                faiss_index_path=faiss_path,
+                whoosh_index_path=whoosh_path,
+                use_chinese_analyzer=settings.index.use_chinese_analyzer,
+                scanner_config={
+                    'max_workers': settings.index.scanner_max_workers,
+                    'max_file_size': settings.index.max_file_size,
+                    'supported_extensions': filtered_extensions
+                },
+                parser_config={
+                    'max_content_length': settings.index.max_content_length
+                }
+            )
+
+            logger.info(f"增量索引使用文件类型过滤: {filtered_extensions}")
+            result = await temp_index_service.update_incremental_index(
+                scan_paths=[folder_path]
+            )
+        else:
+            # 获取默认的文件索引服务
+            index_service = get_file_index_service()
+
+            # 执行增量索引更新
+            result = await index_service.update_incremental_index(
+                scan_paths=[folder_path]
+            )
 
         # 更新任务结果
         if result['success']:

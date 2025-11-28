@@ -10,10 +10,11 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 
 # 导入MVP配置
 try:
-    from app.config.mvp_config import (
+    from app.config.config import (
         get_parser_method, get_content_config, is_mvp_mode,
         get_format_display_name
     )
@@ -105,11 +106,14 @@ class ContentParser:
         if self.mvp_mode:
             # MVP模式：只支持PRD要求的格式
             self.supported_formats = {
-                # Office文档解析
+                # Office文档解析 (现代格式 + 经典格式)
                 '.pdf': self._parse_pdf,
                 '.docx': self._parse_docx,
                 '.xlsx': self._parse_excel,
                 '.pptx': self._parse_pptx,
+                '.doc': self._parse_doc,  # 经典Word格式
+                '.xls': self._parse_excel,  # 经典Excel格式
+                '.ppt': self._parse_ppt,   # 经典PowerPoint格式
                 # 文本文档解析
                 '.txt': self._parse_text,
                 '.md': self._parse_markdown,
@@ -118,18 +122,28 @@ class ContentParser:
                 '.wav': self._parse_audio_metadata,
                 '.mp4': self._parse_video_metadata,
                 '.avi': self._parse_video_metadata,
+                # 图片内容解析
+                '.png': self._parse_image_content,
+                '.jpg': self._parse_image_content,
+                '.jpeg': self._parse_image_content,
             }
             logger.info("使用MVP模式，支持PRD要求的核心文件格式")
         else:
             # 完整模式：支持所有格式
             self.supported_formats = {
+                # Office文档解析 (现代格式 + 经典格式)
                 '.pdf': self._parse_pdf,
                 '.docx': self._parse_docx,
                 '.xlsx': self._parse_excel,
                 '.pptx': self._parse_pptx,
+                '.doc': self._parse_doc,  # 经典Word格式
+                '.xls': self._parse_excel,  # 经典Excel格式
+                '.ppt': self._parse_ppt,   # 经典PowerPoint格式
+                # 文本文档解析
                 '.txt': self._parse_text,
                 '.md': self._parse_markdown,
                 '.rtf': self._parse_text,  # 简化处理
+                # 代码文件解析
                 '.py': self._parse_code,
                 '.js': self._parse_code,
                 '.ts': self._parse_code,
@@ -144,13 +158,17 @@ class ContentParser:
                 '.rb': self._parse_code,
                 '.swift': self._parse_code,
                 '.kt': self._parse_code,
+                # 图片内容解析
+                '.png': self._parse_image_content,
+                '.jpg': self._parse_image_content,
+                '.jpeg': self._parse_image_content,
             }
             logger.info("使用完整模式，支持所有文件格式")
 
         # 编码检测优先级
         self.encoding_priority = ['utf-8', 'gbk', 'gb2312', 'utf-16', 'latin-1', 'ascii']
 
-    def parse_content(self, file_path: str) -> ParsedContent:
+    async def parse_content(self, file_path: str) -> ParsedContent:
         """解析文件内容
 
         Args:
@@ -176,8 +194,19 @@ class ContentParser:
                     metadata={"error": f"不支持的文件格式: {extension}"}
                 )
 
-            # 执行解析
-            parsed_content = parser_func(path)
+            # 执行解析 - 支持异步方法
+            if extension in ['.mp3', '.wav', '.mp4', '.avi']:
+                # 音视频文件需要异步处理
+                if extension in ['.mp3', '.wav']:
+                    parsed_content = await self._extract_audio_content(path)
+                else:
+                    parsed_content = await self._extract_video_content(path)
+            elif extension in ['.png', '.jpg', '.jpeg']:
+                # 图片文件需要异步处理
+                parsed_content = await self._extract_image_content(path)
+            else:
+                # 其他文件类型使用同步处理
+                parsed_content = parser_func(path)
 
             # 内容长度限制
             if len(parsed_content.text) > self.max_content_length:
@@ -654,35 +683,166 @@ class ContentParser:
         else:
             return "unknown"
 
-    def _parse_audio_metadata(self, path: Path) -> ParsedContent:
-        """解析音频文件元数据（MVP阶段仅提取元数据，不提取内容）"""
+    async def _extract_audio_content(self, path: Path) -> ParsedContent:
+        """从音频文件中提取语音内容"""
+        try:
+            import librosa
+            import soundfile as sf
+            import tempfile
+            import os
+        except ImportError as e:
+            logger.warning(f"音频处理库不可用: {e}")
+            return self._parse_audio_metadata_fallback(path)
+
+        try:
+            # 获取音频基本信息
+            extension = path.suffix.lower()
+            file_size = path.stat().st_size
+
+            # 使用librosa获取音频时长
+            duration = librosa.get_duration(path=str(path))
+
+            # 处理15分钟时长限制
+            max_duration = 15 * 60  # 15分钟 = 900秒
+            if duration > max_duration:
+                logger.info(f"音频文件时长超过限制: {duration:.1f}秒 > {max_duration}秒，将提取前{max_duration}秒内容")
+
+                # 使用临时文件截取前15分钟
+                try:
+                    import tempfile
+                    import subprocess
+
+                    with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as temp_audio_file:
+                        temp_audio_path = temp_audio_file.name
+
+                    # 使用ffmpeg截取前15分钟音频
+                    ffmpeg_cmd = [
+                        'ffmpeg', '-i', str(path),
+                        '-t', str(max_duration),  # 截取前15分钟
+                        '-c', 'copy',  # 复制编解码器
+                        '-y',  # 覆盖输出文件
+                        temp_audio_path
+                    ]
+
+                    result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=30)
+
+                    if result.returncode != 0:
+                        logger.warning(f"ffmpeg截取音频失败: {result.stderr}")
+                        # 如果截取失败，继续使用原文件处理
+                        audio_path_for_transcription = str(path)
+                        truncated = False
+                    else:
+                        logger.info(f"成功截取音频前15分钟: {temp_audio_path}")
+                        audio_path_for_transcription = temp_audio_path
+                        truncated = True
+
+                except Exception as e:
+                    logger.warning(f"音频截取失败，使用原文件: {str(e)}")
+                    audio_path_for_transcription = str(path)
+                    truncated = False
+            else:
+                audio_path_for_transcription = str(path)
+                truncated = False
+
+            logger.info(f"开始处理音频文件: {path.name}, 时长: {duration:.1f}秒")
+
+            # 获取AI模型服务进行语音转文字
+            try:
+                from app.services.ai_model_manager import ai_model_service
+
+                # 调用Whisper模型进行语音识别
+                transcription_result = await ai_model_service.speech_to_text(
+                    audio_path_for_transcription,
+                    language="zh"
+                )
+
+                if transcription_result and transcription_result.get("success", False):
+                    transcribed_text = transcription_result.get("text", "").strip()
+                    confidence = transcription_result.get("confidence", 0.0)
+
+                    # 尝试提取元数据
+                    metadata = await self._extract_audio_metadata_with_mutagen(path)
+                    metadata.update({
+                        "transcribed": True,
+                        "transcription_confidence": confidence,
+                        "original_duration": duration,
+                        "file_size": file_size,
+                        "truncated": truncated,
+                        "processed_duration": min(duration, max_duration) if truncated else duration
+                    })
+
+                    # 提取标题（从元数据或文件名）
+                    title = metadata.get('TIT2') or metadata.get('title') or path.stem
+
+                    logger.info(f"音频转录完成: {path.name}, 文本长度: {len(transcribed_text)}字符")
+
+                    return ParsedContent(
+                        text=transcribed_text,
+                        title=title,
+                        language="zh",
+                        confidence=confidence,
+                        metadata=metadata
+                    )
+                else:
+                    error_msg = transcription_result.get("error", "语音识别失败")
+                    logger.warning(f"语音识别失败: {path.name}, 错误: {error_msg}")
+
+                    # 降级为元数据提取
+                    metadata = await self._extract_audio_metadata_with_mutagen(path)
+                    metadata.update({
+                        "transcribed": False,
+                        "transcription_error": error_msg,
+                        "original_duration": duration,
+                        "file_size": file_size,
+                        "truncated": truncated,
+                        "processed_duration": min(duration, max_duration) if truncated else duration
+                    })
+
+                    return ParsedContent(
+                        text=f"[语音识别失败: {error_msg}] - 仅提取元数据",
+                        title=metadata.get('TIT2') or metadata.get('title') or path.stem,
+                        language="metadata",
+                        confidence=0.3,
+                        metadata=metadata
+                    )
+
+            except Exception as e:
+                logger.error(f"调用AI模型服务失败: {str(e)}")
+                return self._parse_audio_metadata_fallback(path, duration)
+
+        except Exception as e:
+            logger.error(f"提取音频内容失败 {path}: {e}")
+            return self._parse_audio_metadata_fallback(path)
+
+        finally:
+            # 清理临时截取文件
+            if truncated and 'temp_audio_path' in locals():
+                try:
+                    if os.path.exists(temp_audio_path):
+                        os.unlink(temp_audio_path)
+                        logger.info(f"清理临时音频文件: {temp_audio_path}")
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {str(e)}")
+
+    async def _extract_audio_metadata_with_mutagen(self, path: Path) -> Dict[str, Any]:
+        """使用mutagen提取音频元数据"""
+        metadata = {
+            "format": "audio",
+            "file_extension": path.suffix.lower(),
+            "file_size": path.stat().st_size
+        }
+
         try:
             import mutagen
             from mutagen.mp3 import MP3
             from mutagen.wave import WAVE
-        except ImportError:
-            logger.warning("mutagen未安装，音频元数据提取功能不可用")
-            return ParsedContent(
-                text="",
-                title=None,
-                language="metadata",
-                confidence=0.0,
-                metadata={"format": "audio", "message": "需要安装mutagen库以提取音频元数据"}
-            )
 
-        try:
             extension = path.suffix.lower()
-            metadata = {
-                "format": "audio",
-                "file_extension": extension,
-                "file_size": path.stat().st_size
-            }
 
             if extension == '.mp3':
                 audio = MP3(str(path))
                 if audio.info:
                     metadata.update({
-                        "duration": audio.info.length,
                         "bitrate": audio.info.bitrate,
                         "sample_rate": audio.info.sample_rate,
                         "channels": audio.info.channels,
@@ -702,23 +862,42 @@ class ContentParser:
                 audio = WAVE(str(path))
                 if audio.info:
                     metadata.update({
-                        "duration": audio.info.length,
                         "sample_rate": audio.info.sample_rate,
                         "channels": audio.info.channels,
                         "bits_per_sample": getattr(audio.info, 'bits_per_sample', 0)
                     })
 
-            format_name = get_format_display_name(extension)
+        except ImportError:
+            logger.warning("mutagen库不可用，跳过详细元数据提取")
+        except Exception as e:
+            logger.warning(f"提取音频元数据失败: {e}")
+
+        return metadata
+
+    def _parse_audio_metadata_fallback(self, path: Path, duration: float = None) -> ParsedContent:
+        """音频解析降级方案：仅提取元数据"""
+        try:
+            format_name = get_format_display_name(path.suffix)
+            metadata = {
+                "format": "audio",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size,
+                "transcribed": False,
+                "fallback": True
+            }
+
+            if duration is not None:
+                metadata["duration"] = duration
+
             return ParsedContent(
-                text=f"[{format_name} 元数据已提取] - 内容提取功能将在后续版本支持",
-                title=metadata.get('TIT2') or metadata.get('title'),
+                text=f"[{format_name} 元数据已提取] - 内容提取功能暂不可用",
+                title=path.stem,
                 language="metadata",
-                confidence=0.9,
+                confidence=0.6,
                 metadata=metadata
             )
-
         except Exception as e:
-            logger.error(f"解析音频元数据失败 {path}: {e}")
+            logger.error(f"音频元数据提取失败: {e}")
             return ParsedContent(
                 text="",
                 title=None,
@@ -727,33 +906,29 @@ class ContentParser:
                 metadata={"format": "audio", "error": str(e)}
             )
 
-    def _parse_video_metadata(self, path: Path) -> ParsedContent:
-        """解析视频文件元数据（MVP阶段仅提取元数据，不提取内容）"""
+    async def _extract_video_content(self, path: Path) -> ParsedContent:
+        """从视频文件中提取音频内容"""
         try:
             import cv2
-        except ImportError:
-            logger.warning("opencv-python未安装，视频元数据提取功能不可用")
-            return ParsedContent(
-                text="",
-                title=None,
-                language="metadata",
-                confidence=0.0,
-                metadata={"format": "video", "message": "需要安装opencv-python库以提取视频元数据"}
-            )
+            import librosa
+            import soundfile as sf
+            import tempfile
+            import os
+            import subprocess
+        except ImportError as e:
+            logger.warning(f"视频处理库不可用: {e}")
+            return self._parse_video_metadata_fallback(path)
 
         try:
-            cap = cv2.VideoCapture(str(path))
+            # 获取视频基本信息
+            extension = path.suffix.lower()
+            file_size = path.stat().st_size
 
+            # 获取视频时长
+            cap = cv2.VideoCapture(str(path))
             if not cap.isOpened():
                 raise ValueError("无法打开视频文件")
 
-            metadata = {
-                "format": "video",
-                "file_extension": path.suffix.lower(),
-                "file_size": path.stat().st_size
-            }
-
-            # 获取视频基本信息
             fps = cap.get(cv2.CAP_PROP_FPS)
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -764,29 +939,158 @@ class ContentParser:
             else:
                 duration = 0
 
-            metadata.update({
-                "duration": duration,
-                "fps": fps,
-                "frame_count": frame_count,
-                "width": width,
-                "height": height,
-                "resolution": f"{width}x{height}",
-                "codec": cv2.VideoWriter_fourcc(*'DIVX').item() if hasattr(cv2.VideoWriter_fourcc(*'DIVX'), 'item') else 'unknown'
-            })
-
             cap.release()
 
+            # 处理15分钟时长限制
+            max_duration = 15 * 60  # 15分钟 = 900秒
+            if duration > max_duration:
+                logger.info(f"视频文件时长超过限制: {duration:.1f}秒 > {max_duration}秒，将提取前{max_duration}秒内容")
+                video_truncated = True
+            else:
+                video_truncated = False
+
+            logger.info(f"开始处理视频文件: {path.name}, 时长: {duration:.1f}秒")
+
+            # 提取音频轨道
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio_file:
+                temp_audio_path = temp_audio_file.name
+
+            try:
+                # 动态构建ffmpeg命令
+                ffmpeg_cmd = [
+                    'ffmpeg', '-i', str(path),
+                    '-vn',  # 不要视频
+                    '-acodec', 'pcm_s16le',  # 音频编码
+                    '-ar', '16000',  # 采样率16kHz
+                    '-ac', '1',  # 单声道
+                ]
+
+                # 如果需要截取前15分钟，添加-t参数
+                if video_truncated:
+                    ffmpeg_cmd.extend(['-t', str(max_duration)])
+
+                ffmpeg_cmd.extend(['-y', temp_audio_path])  # 覆盖输出文件
+
+                result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=min(duration, max_duration) + 60)
+
+                if result.returncode != 0:
+                    logger.warning(f"ffmpeg提取音频失败: {result.stderr}")
+                    return self._parse_video_metadata_fallback(path, duration, width, height, fps)
+
+                logger.info(f"音频轨道提取完成: {temp_audio_path} (截取: {video_truncated})")
+
+                # 使用AI模型服务进行语音转文字
+                try:
+                    from app.services.ai_model_manager import ai_model_service
+
+                    # 调用Whisper模型进行语音识别
+                    transcription_result = await ai_model_service.speech_to_text(
+                        temp_audio_path,
+                        language="zh"
+                    )
+
+                    if transcription_result and transcription_result.get("success", False):
+                        transcribed_text = transcription_result.get("text", "").strip()
+                        confidence = transcription_result.get("confidence", 0.0)
+
+                        logger.info(f"视频音频转录完成: {path.name}, 文本长度: {len(transcribed_text)}字符")
+
+                        # 构建元数据
+                        metadata = {
+                            "format": "video",
+                            "file_extension": extension,
+                            "original_duration": duration,
+                            "file_size": file_size,
+                            "resolution": f"{width}x{height}",
+                            "fps": fps,
+                            "transcribed": True,
+                            "transcription_confidence": confidence,
+                            "audio_extracted": True,
+                            "truncated": video_truncated,
+                            "processed_duration": min(duration, max_duration) if video_truncated else duration
+                        }
+
+                        return ParsedContent(
+                            text=transcribed_text,
+                            title=path.stem,
+                            language="zh",
+                            confidence=confidence,
+                            metadata=metadata
+                        )
+                    else:
+                        error_msg = transcription_result.get("error", "语音识别失败")
+                        logger.warning(f"视频语音识别失败: {path.name}, 错误: {error_msg}")
+
+                        metadata = {
+                            "format": "video",
+                            "file_extension": extension,
+                            "original_duration": duration,
+                            "file_size": file_size,
+                            "resolution": f"{width}x{height}",
+                            "fps": fps,
+                            "audio_extracted": True,
+                            "transcribed": False,
+                            "transcription_error": error_msg,
+                            "truncated": video_truncated,
+                            "processed_duration": min(duration, max_duration) if video_truncated else duration
+                        }
+
+                        return ParsedContent(
+                            text=f"[语音识别失败: {error_msg}] - 音频轨道已提取",
+                            title=path.stem,
+                            language="metadata",
+                            confidence=0.3,
+                            metadata=metadata
+                        )
+
+                except Exception as e:
+                    logger.error(f"调用AI模型服务失败: {str(e)}")
+                    return self._parse_video_metadata_fallback(path, duration, width, height, fps)
+
+            finally:
+                # 清理临时音频文件
+                if 'temp_audio_path' in locals() and os.path.exists(temp_audio_path):
+                    try:
+                        os.unlink(temp_audio_path)
+                        logger.info(f"清理临时视频音频文件: {temp_audio_path}")
+                    except Exception as e:
+                        logger.warning(f"清理临时文件失败: {str(e)}")
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"视频处理超时: {path}")
+            return self._parse_video_metadata_fallback(path)
+        except Exception as e:
+            logger.error(f"提取视频内容失败 {path}: {e}")
+            return self._parse_video_metadata_fallback(path)
+
+    def _parse_video_metadata_fallback(self, path: Path, duration: float = None, width: int = None, height: int = None, fps: float = None) -> ParsedContent:
+        """视频解析降级方案：仅提取元数据"""
+        try:
             format_name = get_format_display_name(path.suffix)
+            metadata = {
+                "format": "video",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size,
+                "transcribed": False,
+                "fallback": True
+            }
+
+            if duration is not None:
+                metadata["duration"] = duration
+            if width is not None and height is not None:
+                metadata["resolution"] = f"{width}x{height}"
+            if fps is not None:
+                metadata["fps"] = fps
+
             return ParsedContent(
-                text=f"[{format_name} 元数据已提取] - 内容提取功能将在后续版本支持",
-                title=None,
+                text=f"[{format_name} 元数据已提取] - 内容提取功能暂不可用",
+                title=path.stem,
                 language="metadata",
-                confidence=0.9,
+                confidence=0.6,
                 metadata=metadata
             )
-
         except Exception as e:
-            logger.error(f"解析视频元数据失败 {path}: {e}")
+            logger.error(f"视频元数据提取失败: {e}")
             return ParsedContent(
                 text="",
                 title=None,
@@ -794,6 +1098,275 @@ class ContentParser:
                 confidence=0.0,
                 metadata={"format": "video", "error": str(e)}
             )
+
+    async def _extract_image_content(self, path: Path) -> ParsedContent:
+        """从图片文件中提取内容"""
+        try:
+            from PIL import Image
+            import numpy as np
+        except ImportError as e:
+            logger.warning(f"图片处理库不可用: {e}")
+            return self._parse_image_metadata_fallback(path)
+
+        try:
+            # 获取图片基本信息
+            extension = path.suffix.lower()
+            file_size = path.stat().st_size
+
+            logger.info(f"开始处理图片文件: {path.name}, 大小: {file_size}字节")
+
+            # 使用AI模型服务进行图像理解
+            try:
+                from app.services.ai_model_manager import ai_model_service
+
+                # 准备图像理解查询文本
+                query_texts = [
+                    "描述这张图片的内容",
+                    "这张图片展示了什么",
+                    "详细说明图片中的主要元素"
+                ]
+
+                # 调用CLIP模型进行图像理解
+                understanding_result = await ai_model_service.image_understanding(
+                    str(path),
+                    query_texts
+                )
+
+                if understanding_result and understanding_result.get("success", False):
+                    # 提取最佳匹配的描述
+                    best_match = understanding_result.get("best_match", {})
+                    image_description = best_match.get("text", "").strip()
+                    confidence = best_match.get("confidence", 0.0)
+
+                    # 如果没有获取到描述，使用默认文本
+                    if not image_description:
+                        image_description = f"这是一张{extension.upper()}格式的图片"
+
+                    # 提取图片元数据
+                    with Image.open(path) as img:
+                        width, height = img.size
+                        metadata = {
+                            "format": "image",
+                            "file_extension": extension,
+                            "file_size": file_size,
+                            "width": width,
+                            "height": height,
+                            "mode": img.mode,
+                            "image_understood": True,
+                            "clip_confidence": confidence,
+                            "processed_at": datetime.now().isoformat()
+                        }
+
+                    logger.info(f"图片理解完成: {path.name}, 描述长度: {len(image_description)}字符")
+
+                    return ParsedContent(
+                        text=image_description,
+                        title=path.stem,
+                        language="zh",
+                        confidence=confidence,
+                        metadata=metadata
+                    )
+                else:
+                    error_msg = understanding_result.get("error", "图像理解失败")
+                    logger.warning(f"图像理解失败: {path.name}, 错误: {error_msg}")
+
+                    # 降级为元数据提取
+                    return self._parse_image_metadata_fallback(path, error_msg)
+
+            except Exception as e:
+                logger.error(f"调用AI模型服务失败: {str(e)}")
+                return self._parse_image_metadata_fallback(path, str(e))
+
+        except Exception as e:
+            logger.error(f"提取图片内容失败 {path}: {e}")
+            return self._parse_image_metadata_fallback(path)
+
+    def _parse_image_metadata_fallback(self, path: Path, error_msg: str = None) -> ParsedContent:
+        """图片解析降级方案：仅提取元数据"""
+        try:
+            from PIL import Image
+
+            format_name = get_format_display_name(path.suffix)
+            metadata = {
+                "format": "image",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size,
+                "image_understood": False,
+                "fallback": True
+            }
+
+            # 尝试获取图片基本信息
+            try:
+                with Image.open(path) as img:
+                    metadata.update({
+                        "width": img.width,
+                        "height": img.height,
+                        "mode": img.mode
+                    })
+            except Exception as e:
+                logger.warning(f"无法读取图片基本信息: {e}")
+
+            # 构建错误消息
+            if error_msg:
+                text = f"[图像理解失败: {error_msg}] - 仅提取元数据"
+            else:
+                text = f"[{format_name} 元数据已提取] - 内容提取功能暂不可用"
+
+            return ParsedContent(
+                text=text,
+                title=path.stem,
+                language="metadata",
+                confidence=0.3,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"图片元数据提取失败: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "image", "error": str(e)}
+            )
+
+    def _parse_doc(self, path: Path) -> ParsedContent:
+        """解析经典Word文档 (.doc)"""
+        try:
+            # 使用python-docx2txt处理经典Word文档
+            # 注意：对于真正的.doc格式，需要使用antiword或python-docx2txt的扩展功能
+            try:
+                import subprocess
+                import tempfile
+                import os
+
+                # 尝试使用antiword工具（如果可用）
+                antiword_cmd = ['antiword', str(path)]
+                result = subprocess.run(antiword_cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode == 0:
+                    text = result.stdout.strip()
+                    logger.info(f"经典Word文档解析成功: {path.name}, 文本长度: {len(text)}字符")
+
+                    return ParsedContent(
+                        text=text,
+                        title=path.stem,
+                        language="zh" if self._is_chinese_text(text) else "en",
+                        confidence=0.8,
+                        metadata={
+                            "format": "doc",
+                            "file_extension": ".doc",
+                            "file_size": path.stat().st_size,
+                            "parser": "antiword"
+                        }
+                    )
+                else:
+                    logger.warning(f"antiword解析失败: {result.stderr}")
+                    raise Exception("antiword工具不可用")
+
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+                logger.warning(f"antiword工具不可用或解析失败: {e}")
+
+                # 降级处理：仅提取元数据
+                return ParsedContent(
+                    text=f"[经典Word文档] - 内容提取功能暂不可用，请安装antiword工具",
+                    title=path.stem,
+                    language="metadata",
+                    confidence=0.3,
+                    metadata={
+                        "format": "doc",
+                        "file_extension": ".doc",
+                        "file_size": path.stat().st_size,
+                        "parser": "fallback",
+                        "note": "需要安装antiword工具以支持内容提取"
+                    }
+                )
+
+        except Exception as e:
+            logger.error(f"经典Word文档解析失败: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "doc", "error": str(e)}
+            )
+
+    def _parse_ppt(self, path: Path) -> ParsedContent:
+        """解析经典PowerPoint演示文稿 (.ppt)"""
+        try:
+            # 对于经典.ppt格式，可以使用python-pptx的有限支持或建议转换为.pptx
+            try:
+                # 尝试使用python-pptx处理（有限支持）
+                from pptx import Presentation
+
+                presentation = Presentation(str(path))
+                text_content = []
+
+                for slide in presentation.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text:
+                            text_content.append(shape.text.strip())
+
+                text = '\n'.join(text_content)
+                logger.info(f"经典PowerPoint解析成功: {path.name}, 文本长度: {len(text)}字符")
+
+                return ParsedContent(
+                    text=text,
+                    title=path.stem,
+                    language="zh" if self._is_chinese_text(text) else "en",
+                    confidence=0.7,
+                    metadata={
+                        "format": "ppt",
+                        "file_extension": ".ppt",
+                        "file_size": path.stat().st_size,
+                        "slides_count": len(presentation.slides),
+                        "parser": "python-pptx"
+                    }
+                )
+
+            except Exception as e:
+                logger.warning(f"python-pptx解析经典PPT失败: {e}")
+
+                # 降级处理
+                return ParsedContent(
+                    text=f"[经典PowerPoint演示文稿] - 内容提取功能有限，建议转换为.pptx格式",
+                    title=path.stem,
+                    language="metadata",
+                    confidence=0.3,
+                    metadata={
+                        "format": "ppt",
+                        "file_extension": ".ppt",
+                        "file_size": path.stat().st_size,
+                        "parser": "fallback",
+                        "note": "建议转换为.pptx格式以获得更好的支持"
+                    }
+                )
+
+        except Exception as e:
+            logger.error(f"经典PowerPoint解析失败: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "ppt", "error": str(e)}
+            )
+
+    def _is_chinese_text(self, text: str) -> bool:
+        """检测文本是否主要为中文"""
+        if not text:
+            return False
+
+        # 简化的中文检测逻辑
+        chinese_chars = len([c for c in text if '\u4e00' <= c <= '\u9fff'])
+        english_chars = len([c for c in text if c.isalpha() and c.isascii()])
+
+        if chinese_chars > english_chars:
+            return True
+        elif english_chars > 0:
+            return False
+        else:
+            return False
 
     def get_supported_formats(self) -> List[str]:
         """获取支持的文件格式"""

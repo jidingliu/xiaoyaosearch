@@ -16,7 +16,7 @@ from datetime import datetime
 
 # 导入MVP配置
 try:
-    from app.config.mvp_config import get_mvp_supported_extensions, is_mvp_mode, get_file_type
+    from app.config.config import get_mvp_supported_extensions, is_mvp_mode, get_file_type
 except ImportError:
     # 如果配置文件不存在，使用默认配置
     def get_mvp_supported_extensions() -> Set[str]:
