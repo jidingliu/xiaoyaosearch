@@ -9,7 +9,7 @@ try:
 except ImportError:
     from pydantic import BaseSettings
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import os
 
 
@@ -57,6 +57,88 @@ class IndexConfig(BaseSettings):
 
     class Config:
         env_prefix = "INDEX_"
+
+
+class ChunkConfig(BaseSettings):
+    """分块功能配置"""
+    # 默认分块策略配置
+    default_chunk_size: int = Field(default=500, description="默认分块大小（字符数）")
+    default_chunk_overlap: int = Field(default=50, description="默认重叠大小（字符数）")
+    default_chunk_strategy: str = Field(default="500+50", description="默认分块策略字符串")
+
+    # 分块处理限制配置
+    chunk_size_min: int = Field(default=100, description="最小分块大小")
+    chunk_size_max: int = Field(default=2000, description="最大分块大小")
+    chunk_overlap_max_ratio: float = Field(default=0.5, description="重叠大小最大比例（相对于分块大小）")
+    chunk_max_per_document: int = Field(default=100, description="每个文档最大分块数")
+
+    # 分块质量检查配置
+    chunk_quality_check_enabled: bool = Field(default=True, description="是否启用分块质量检查")
+    chunk_min_content_length: int = Field(default=10, description="最小有效内容长度")
+    chunk_auto_chunk_types: List[str] = Field(
+        default=["txt", "md", "pdf", "docx", "doc"],
+        description="自动分块的文件类型"
+    )
+
+    # 分块索引优化配置
+    chunk_embedding_batch_size: int = Field(default=32, description="向量嵌入批处理大小")
+    chunk_index_batch_size: int = Field(default=1000, description="索引更新批处理大小")
+    chunk_search_multiplier: float = Field(default=3.0, description="分块搜索结果倍数")
+    chunk_min_relevance: float = Field(default=0.3, description="最小分块相关性阈值")
+
+    class Config:
+        env_prefix = "CHUNK_"
+
+    def parse_chunk_strategy(self, strategy: str = None) -> tuple[int, int]:
+        """解析分块策略
+
+        Args:
+            strategy: 策略字符串，如 "500+50"，如果为None则使用默认策略
+
+        Returns:
+            tuple[int, int]: (分块大小, 重叠大小)
+        """
+        if not strategy:
+            strategy = self.default_chunk_strategy
+
+        try:
+            if '+' in strategy:
+                parts = strategy.split('+')
+                chunk_size = int(parts[0])
+                overlap = int(parts[1])
+            else:
+                chunk_size = int(strategy)
+                overlap = min(self.default_chunk_overlap, chunk_size // 10)
+
+            # 验证参数范围
+            chunk_size = max(self.chunk_size_min, min(chunk_size, self.chunk_size_max))
+            overlap = max(0, min(overlap, int(chunk_size * self.chunk_overlap_max_ratio)))
+
+            return chunk_size, overlap
+
+        except Exception:
+            # 解析失败时使用默认值
+            return self.default_chunk_size, self.default_chunk_overlap
+
+    def should_auto_chunk(self, file_type: str, file_extension: str = None) -> bool:
+        """判断文件是否应该自动分块
+
+        Args:
+            file_type: 文件类型（如 'document', 'image' 等）
+            file_extension: 文件扩展名（如 'txt', 'pdf' 等）
+
+        Returns:
+            bool: 是否应该自动分块
+        """
+        # 目前只对文档类型进行自动分块
+        if file_type != 'document':
+            return False
+
+        # 检查扩展名是否在自动分块列表中
+        if file_extension and file_extension.lower().lstrip('.') in self.chunk_auto_chunk_types:
+            return True
+
+        return False
 
 
 class DatabaseConfig(BaseSettings):
@@ -151,6 +233,163 @@ class SecurityConfig(BaseSettings):
         env_prefix = "SECURITY_"
 
 
+class MVPConfig(BaseSettings):
+    """MVP阶段配置"""
+    # MVP环境控制
+    mvp_mode: bool = Field(default=True, description="是否启用MVP模式")
+
+    # MVP阶段支持的文件扩展名（PRD P0要求）
+    mvp_supported_extensions: List[str] = Field(
+        default=[
+            # 视频类 - P0要求
+            ".mp4", ".avi",
+            # 音频类 - P0要求
+            ".mp3", ".wav",
+            # 图片类 - P0要求
+            ".png", ".jpg", ".jpeg",
+            # 文档类 - P0要求
+            # Office文档 (支持现代格式和经典格式)
+            ".pdf", ".docx", ".xlsx", ".pptx",  # 现代Office格式
+            ".doc", ".xls", ".ppt",  # 经典Office格式
+            # 文本文档
+            ".txt", ".md",
+        ],
+        description="MVP阶段支持的文件扩展名"
+    )
+
+    # 文件类型分类
+    mvp_file_types: Dict[str, str] = Field(
+        default={
+            ".mp4": "video",
+            ".avi": "video",
+            ".mp3": "audio",
+            ".wav": "audio",
+            ".png": "image",
+            ".jpg": "image",
+            ".jpeg": "image",
+            ".pdf": "document",
+            ".docx": "document",
+            ".xlsx": "document",
+            ".pptx": "document",
+            ".doc": "document",
+            ".xls": "document",
+            ".ppt": "document",
+            ".txt": "document",
+            ".md": "document",
+        },
+        description="文件扩展名到类型的映射"
+    )
+
+    # 格式友好显示名称
+    mvp_format_display_names: Dict[str, str] = Field(
+        default={
+            ".mp4": "MP4视频",
+            ".avi": "AVI视频",
+            ".mp3": "MP3音频",
+            ".wav": "WAV音频",
+            ".png": "PNG图片",
+            ".jpg": "JPEG图片",
+            ".jpeg": "JPEG图片",
+            ".pdf": "PDF文档",
+            ".docx": "Word文档",
+            ".xlsx": "Excel表格",
+            ".pptx": "PowerPoint演示文稿",
+            ".doc": "Word文档(经典)",
+            ".xls": "Excel表格(经典)",
+            ".ppt": "PowerPoint演示文稿(经典)",
+            ".txt": "文本文件",
+            ".md": "Markdown文档",
+        },
+        description="文件格式友好显示名称"
+    )
+
+    class Config:
+        env_prefix = "MVP_"
+
+    def get_supported_extensions(self) -> set:
+        """获取MVP支持的文件扩展名"""
+        return set(self.mvp_supported_extensions) if self.mvp_mode else set()
+
+    def get_file_type(self, extension: str) -> str:
+        """根据扩展名获取文件类型"""
+        return self.mvp_file_types.get(extension.lower(), "unknown")
+
+    def get_format_display_name(self, extension: str) -> str:
+        """获取格式友好显示名称"""
+        return self.mvp_format_display_names.get(extension.lower(), extension.upper())
+
+    def get_content_config(self, file_type: str) -> Dict[str, Any]:
+        """根据文件类型获取内容提取配置"""
+        # 默认配置（如果需要可以扩展）
+        default_config = {
+            'document': {
+                'extract_content': True,
+                'priority': 1,
+                'max_content_length': 1024 * 1024,
+            },
+            'audio': {
+                'extract_content': True,
+                'extract_metadata': True,
+                'priority': 2,
+                'max_duration': 15 * 60,
+                'whisper_model': 'base',
+                'language': 'zh',
+                'metadata_fields': ['duration', 'bitrate', 'sample_rate', 'title', 'artist', 'album'],
+            },
+            'video': {
+                'extract_content': True,
+                'extract_metadata': True,
+                'priority': 2,
+                'max_duration': 15 * 60,
+                'whisper_model': 'base',
+                'language': 'zh',
+                'ffmpeg_audio_codec': 'pcm_s16le',
+                'ffmpeg_sample_rate': 16000,
+                'ffmpeg_channels': 1,
+                'metadata_fields': ['duration', 'resolution', 'fps', 'codec', 'title'],
+            },
+            'image': {
+                'extract_content': True,
+                'extract_metadata': True,
+                'priority': 2,
+                'clip_model': 'chinese-clip-vit-base-patch16',
+                'max_image_size': 512,
+                'metadata_fields': ['width', 'height', 'format', 'mode'],
+            },
+        }
+        return default_config.get(file_type, {})
+
+    def get_parser_method(self, extension: str) -> str:
+        """根据扩展名获取解析器方法名"""
+        # 默认解析器方法映射
+        parser_methods = {
+            # Office文档解析
+            '.pdf': '_parse_pdf',
+            '.docx': '_parse_docx',
+            '.xlsx': '_parse_excel',
+            '.pptx': '_parse_pptx',
+            '.doc': '_parse_doc',
+            '.xls': '_parse_excel',
+            '.ppt': '_parse_ppt',
+            # 文本文档解析
+            '.txt': '_parse_text',
+            '.md': '_parse_markdown',
+            # 音视频元数据解析
+            '.mp3': '_parse_audio_metadata',
+            '.wav': '_parse_audio_metadata',
+            '.mp4': '_parse_video_metadata',
+            '.avi': '_parse_video_metadata',
+            '.png': '_parse_image_content',
+            '.jpg': '_parse_image_content',
+            '.jpeg': '_parse_image_content',
+        }
+        return parser_methods.get(extension.lower(), '')
+
+    def is_mvp_mode(self) -> bool:
+        """检查是否处于MVP模式"""
+        return self.mvp_mode
+
+
 class AppConfig(BaseSettings):
     """应用总配置"""
     # 应用基础信息
@@ -163,6 +402,8 @@ class AppConfig(BaseSettings):
 
     # 子配置
     index: IndexConfig = Field(default_factory=IndexConfig)
+    chunk: ChunkConfig = Field(default_factory=ChunkConfig)
+    mvp: MVPConfig = Field(default_factory=MVPConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

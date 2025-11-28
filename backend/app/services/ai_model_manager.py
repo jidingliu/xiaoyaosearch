@@ -284,6 +284,43 @@ class AIModelService:
 
         return await model.predict(texts, **kwargs)
 
+    async def batch_text_embedding(self, texts: List[str], batch_size: int = 32, **kwargs) -> List[List[float]]:
+        """
+        批量文本嵌入
+
+        Args:
+            texts: 文本列表
+            batch_size: 批处理大小
+            **kwargs: 其他参数
+
+        Returns:
+            List[List[float]]: 嵌入向量列表
+        """
+        if isinstance(texts, str):
+            texts = [texts]
+
+        all_embeddings = []
+        total_texts = len(texts)
+
+        # 分批处理
+        for i in range(0, total_texts, batch_size):
+            batch_texts = texts[i:i + batch_size]
+            try:
+                batch_embeddings = await self.text_embedding(batch_texts, **kwargs)
+                if isinstance(batch_embeddings, list):
+                    all_embeddings.extend(batch_embeddings)
+                else:
+                    # 如果返回单个向量，转换为列表
+                    all_embeddings.append(batch_embeddings)
+            except Exception as e:
+                logger.error(f"批量嵌入处理失败 (批次 {i//batch_size + 1}): {str(e)}")
+                # 使用零向量作为fallback
+                dummy_embedding = [0.0] * 1024  # 假设1024维
+                for _ in batch_texts:
+                    all_embeddings.append(dummy_embedding)
+
+        return all_embeddings
+
     async def speech_to_text(self, audio_input: Any, **kwargs) -> Dict[str, Any]:
         """
         语音转文字

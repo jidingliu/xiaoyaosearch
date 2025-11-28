@@ -16,7 +16,14 @@ import logging
 from .file_scanner import FileScanner, FileInfo
 from .metadata_extractor import MetadataExtractor
 from .content_parser import ContentParser, ParsedContent
-from .index_builder import IndexBuilder
+
+# 导入分块索引服务（主要索引服务）
+try:
+    from .chunk_index_service import get_chunk_index_service
+    CHUNK_INDEX_AVAILABLE = True
+except ImportError as e:
+    CHUNK_INDEX_AVAILABLE = False
+    logger.warning(f"分块索引服务不可用: {e}")
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +71,10 @@ class FileIndexService:
         self.scanner = FileScanner(**(scanner_config or {}))
         self.metadata_extractor = MetadataExtractor()
         self.content_parser = ContentParser(**(parser_config or {}))
-        self.index_builder = IndexBuilder(
-            faiss_index_path=faiss_index_path,
-            whoosh_index_path=whoosh_index_path,
-            use_chinese_analyzer=use_chinese_analyzer,
-            use_ai_embeddings=True  # 默认启用AI嵌入
-        )
+
+        # 存储传统索引路径（用于兼容性，但主要使用分块索引）
+        self.traditional_faiss_path = faiss_index_path
+        self.traditional_whoosh_path = whoosh_index_path
 
         # 索引状态
         self.index_status = {
@@ -155,13 +160,34 @@ class FileIndexService:
                     'error': '没有成功处理的文档'
                 }
 
-            # 3. 构建索引
+            # 3. 构建索引（主要使用分块索引）
             self.index_status['indexing_progress'] = 80.0
             if progress_callback:
                 progress_callback("构建索引", 80.0)
 
-            # 构建索引（异步调用）
-            index_success = await self.index_builder.build_indexes(documents)
+            chunk_index_success = False
+            index_success = False
+
+            if CHUNK_INDEX_AVAILABLE:
+                try:
+                    if progress_callback:
+                        progress_callback("构建分块索引", 85.0)
+
+                    logger.info("开始构建分块索引")
+                    chunk_index_service = get_chunk_index_service()
+                    chunk_index_success = await chunk_index_service.build_chunk_indexes(documents)
+
+                    if chunk_index_success:
+                        logger.info("分块索引构建成功")
+                        index_success = True  # 分块索引成功代表整体成功
+                    else:
+                        logger.warning("分块索引构建失败")
+
+                except Exception as e:
+                    logger.error(f"构建分块索引失败: {e}")
+                    chunk_index_success = False
+            else:
+                logger.info("分块索引服务不可用，无法构建索引")
 
             # 4. 保存文件数据到数据库
             if index_success:
@@ -180,13 +206,24 @@ class FileIndexService:
             duration = datetime.now() - start_time
             logger.info(f"完整索引构建完成，耗时: {duration.total_seconds():.2f} 秒")
 
+            # 获取分块索引统计信息
+            chunk_index_stats = {}
+            if CHUNK_INDEX_AVAILABLE and chunk_index_success:
+                try:
+                    chunk_index_service = get_chunk_index_service()
+                    chunk_index_stats = chunk_index_service.get_index_stats()
+                except Exception as e:
+                    logger.warning(f"获取分块索引统计失败: {e}")
+
             return {
                 'success': index_success,
                 'total_files_found': len(all_files),
                 'documents_indexed': len(documents),
                 'failed_files': failed_count,
                 'duration_seconds': duration.total_seconds(),
-                'index_stats': self.index_builder.get_index_stats()
+                'chunk_index_stats': chunk_index_stats,
+                'chunk_index_available': CHUNK_INDEX_AVAILABLE,
+                'chunk_index_success': chunk_index_success
             }
 
         except Exception as e:
@@ -375,7 +412,12 @@ class FileIndexService:
                             word_count=len(document.get('content', '').split()),
                             parse_confidence=1.0,  # 简化处理
                             index_quality_score=1.0,
-                            needs_reindex=False
+                            needs_reindex=False,
+                            # v2.0分块字段（初始值，将在分块处理后更新）
+                            is_chunked=False,
+                            total_chunks=1,
+                            chunk_strategy='500+50',
+                            avg_chunk_size=500
                         )
 
                         # 合并处理：如果文件已存在则更新，否则创建
@@ -572,7 +614,21 @@ class FileIndexService:
     def get_index_status(self) -> Dict[str, Any]:
         """获取索引状态"""
         status = self.index_status.copy()
-        status.update(self.index_builder.get_index_stats())
+
+        # 如果分块索引可用，添加分块索引统计
+        if CHUNK_INDEX_AVAILABLE:
+            try:
+                chunk_index_service = get_chunk_index_service()
+                chunk_stats = chunk_index_service.get_index_stats()
+                status.update({
+                    'chunk_faiss_index_exists': chunk_stats.get('chunk_faiss_index_exists', False),
+                    'chunk_whoosh_index_exists': chunk_stats.get('chunk_whoosh_index_exists', []),
+                    'total_chunks_created': chunk_stats.get('total_chunks_created', 0),
+                    'chunk_faiss_index_size': chunk_stats.get('chunk_faiss_index_size', 0)
+                })
+            except Exception as e:
+                logger.warning(f"获取分块索引统计失败: {e}")
+
         return status
 
     def search_files(
@@ -705,6 +761,40 @@ class FileIndexService:
             logger.info("文件索引服务资源清理完成")
         except Exception as e:
             logger.error(f"清理资源失败: {e}")
+
+
+# 全局文件索引服务实例（单例模式）
+_file_index_service: Optional[FileIndexService] = None
+
+
+def get_file_index_service() -> FileIndexService:
+    """获取文件索引服务实例（单例模式）
+
+    Returns:
+        FileIndexService: 文件索引服务实例
+    """
+    global _file_index_service
+    if _file_index_service is None:
+        from app.core.config import get_settings
+        settings = get_settings()
+
+        faiss_path, whoosh_path = settings.get_index_paths()
+        _file_index_service = FileIndexService(
+            data_root=settings.index.data_root,
+            faiss_index_path=faiss_path,
+            whoosh_index_path=whoosh_path,
+            use_chinese_analyzer=settings.index.use_chinese_analyzer,
+            scanner_config={
+                'max_workers': settings.index.scanner_max_workers,
+                'max_file_size': settings.index.max_file_size,
+                'supported_extensions': set(settings.index.supported_extensions)
+            },
+            parser_config={
+                'max_content_length': settings.index.max_content_length
+            }
+        )
+        logger.info("文件索引服务实例已创建")
+    return _file_index_service
 
 
 # 测试代码

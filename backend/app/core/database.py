@@ -59,7 +59,7 @@ def get_db() -> Generator[Session, None, None]:
 
 def init_database() -> None:
     """
-    初始化数据库，创建所有表
+    初始化数据库，创建所有表并填充默认数据
     """
     try:
         # 导入所有模型，确保它们被注册到Base.metadata
@@ -73,11 +73,57 @@ def init_database() -> None:
 
         # 创建所有表
         Base.metadata.create_all(bind=engine)
+        logger.info(f"数据库表创建完成: {DATABASE_PATH}")
+
+        # 初始化默认设置
+        _init_default_settings()
+
         logger.info(f"数据库初始化完成: {DATABASE_PATH}")
 
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}")
         raise
+
+
+def _init_default_settings() -> None:
+    """
+    初始化默认应用设置
+    """
+    try:
+        from app.models.app_settings import AppSettingsModel
+
+        # 创建数据库会话
+        db = SessionLocal()
+
+        try:
+            # 检查是否已有设置
+            existing_count = db.query(AppSettingsModel).count()
+
+            if existing_count == 0:
+                # 获取默认设置
+                default_settings = AppSettingsModel.get_default_settings()
+
+                # 批量创建默认设置
+                for setting_data in default_settings:
+                    setting = AppSettingsModel(
+                        setting_key=setting_data['setting_key'],
+                        setting_value=setting_data['setting_value'],
+                        setting_type=setting_data['setting_type'],
+                        description=setting_data['description']
+                    )
+                    db.add(setting)
+
+                db.commit()
+                logger.info(f"成功创建 {len(default_settings)} 个默认应用设置")
+            else:
+                logger.debug(f"应用设置已存在 ({existing_count} 个)，跳过初始化")
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.warning(f"默认设置初始化失败: {str(e)}")
+        # 不抛出异常，允许系统继续运行
 
 
 def get_database_info() -> dict:

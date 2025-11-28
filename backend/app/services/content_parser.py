@@ -12,12 +12,22 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-# 导入MVP配置
+# 导入统一配置
 try:
-    from app.config.config import (
-        get_parser_method, get_content_config, is_mvp_mode,
-        get_format_display_name
-    )
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    def get_parser_method(extension: str) -> str:
+        return settings.mvp.get_parser_method(extension)
+
+    def get_content_config(file_type: str) -> Dict[str, Any]:
+        return settings.mvp.get_content_config(file_type)
+
+    def is_mvp_mode() -> bool:
+        return settings.mvp.is_mvp_mode()
+
+    def get_format_display_name(extension: str) -> str:
+        return settings.mvp.get_format_display_name(extension)
 except ImportError:
     # 如果配置文件不存在，使用默认配置
     def get_parser_method(extension: str) -> str:

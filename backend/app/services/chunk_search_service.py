@@ -81,7 +81,8 @@ class ChunkSearchService:
         if not chunk_faiss_index_path:
             chunk_faiss_index_path = faiss_index_path.replace('.faiss', '_chunks.faiss')
         if not chunk_whoosh_index_path:
-            chunk_whoosh_index_path = whoosh_index_path + '_chunks'
+            # 分块Whoosh索引使用同一个目录，但使用不同的schema和文件结构
+            chunk_whoosh_index_path = whoosh_index_path  # 使用相同的whoosh目录
 
         self.chunk_faiss_index_path = chunk_faiss_index_path
         self.chunk_whoosh_index_path = chunk_whoosh_index_path

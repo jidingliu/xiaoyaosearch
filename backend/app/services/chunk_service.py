@@ -48,15 +48,19 @@ class ChunkService:
     - 内容重装
     """
 
-    def __init__(self, default_chunk_size: int = 500, default_overlap: int = 50):
+    def __init__(self, default_chunk_size: int = None, default_overlap: int = None):
         """初始化分块服务
 
         Args:
-            default_chunk_size: 默认分块大小（字符数）
-            default_overlap: 默认重叠大小（字符数）
+            default_chunk_size: 默认分块大小（字符数），如果为None则从配置文件读取
+            default_overlap: 默认重叠大小（字符数），如果为None则从配置文件读取
         """
-        self.default_chunk_size = default_chunk_size
-        self.default_overlap = default_overlap
+        # 从统一配置文件读取默认值
+        from app.core.config import get_settings
+        settings = get_settings()
+
+        self.default_chunk_size = default_chunk_size if default_chunk_size is not None else settings.chunk.default_chunk_size
+        self.default_overlap = default_overlap if default_overlap is not None else settings.chunk.default_chunk_overlap
 
         # 段落分隔符（按优先级排序）
         self.paragraph_separators = [
@@ -75,7 +79,7 @@ class ChunkService:
 
         logger.info(f"分块服务初始化完成，默认分块大小: {default_chunk_size}，重叠: {default_overlap}")
 
-    def intelligent_chunking(self, content: str, strategy: str = "500+50") -> List[ChunkInfo]:
+    def intelligent_chunking(self, content: str, strategy: str = None) -> List[ChunkInfo]:
         """智能分块：按语义边界分割
 
         Args:
@@ -117,29 +121,20 @@ class ChunkService:
             # 回退到简单分块
             return self._simple_chunking(content, chunk_size, overlap)
 
-    def _parse_strategy(self, strategy: str) -> Tuple[int, int]:
+    def _parse_strategy(self, strategy: str = None) -> Tuple[int, int]:
         """解析分块策略
 
         Args:
-            strategy: 策略字符串，如 "500+50"
+            strategy: 策略字符串，如 "500+50"，如果为None则使用配置文件的默认策略
 
         Returns:
             Tuple[int, int]: (分块大小, 重叠大小)
         """
         try:
-            if '+' in strategy:
-                parts = strategy.split('+')
-                chunk_size = int(parts[0])
-                overlap = int(parts[1])
-            else:
-                chunk_size = int(strategy)
-                overlap = min(50, chunk_size // 10)  # 默认重叠为分块大小的10%
-
-            # 验证参数
-            chunk_size = max(100, min(chunk_size, 2000))  # 限制在100-2000字符
-            overlap = max(0, min(overlap, chunk_size // 2))  # 重叠不超过分块大小的一半
-
-            return chunk_size, overlap
+            # 使用统一配置文件的解析函数
+            from app.core.config import get_settings
+            settings = get_settings()
+            return settings.chunk.parse_chunk_strategy(strategy)
 
         except Exception as e:
             logger.warning(f"解析分块策略失败 {strategy}: {e}，使用默认值")

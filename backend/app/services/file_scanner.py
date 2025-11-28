@@ -14,9 +14,19 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-# 导入MVP配置
+# 导入统一配置
 try:
-    from app.config.config import get_mvp_supported_extensions, is_mvp_mode, get_file_type
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    def get_mvp_supported_extensions() -> Set[str]:
+        return settings.mvp.get_supported_extensions()
+
+    def is_mvp_mode() -> bool:
+        return settings.mvp.is_mvp_mode()
+
+    def get_file_type(extension: str) -> str:
+        return settings.mvp.get_file_type(extension)
 except ImportError:
     # 如果配置文件不存在，使用默认配置
     def get_mvp_supported_extensions() -> Set[str]:

@@ -92,7 +92,12 @@ class FileModel(Base):
             "last_error": self.last_error,
             "retry_count": self.retry_count,
             "index_version": self.index_version,
-            "needs_reindex": self.needs_reindex
+            "needs_reindex": self.needs_reindex,
+            # v2.0分块支持字段
+            "is_chunked": self.is_chunked,
+            "total_chunks": self.total_chunks,
+            "chunk_strategy": self.chunk_strategy,
+            "avg_chunk_size": self.avg_chunk_size
         }
 
     @classmethod
@@ -289,15 +294,57 @@ class FileModel(Base):
             '.rs': 'text/x-rust',
         }
 
-    # 分块相关字段（通过迁移脚本添加）
-    # is_chunked = Column(Boolean, default=False, comment="是否已分块处理")
-    # total_chunks = Column(Integer, default=1, comment="总分块数")
-    # chunk_strategy = Column(String(50), default='500+50', comment="分块策略")
-    # avg_chunk_size = Column(Integer, default=500, comment="平均分块大小")
+    # 分块相关字段 (v2.0新增)
+    is_chunked = Column(Boolean, default=False, comment="是否已分块处理")
+    total_chunks = Column(Integer, default=1, comment="总分块数量")
+    chunk_strategy = Column(String(50), default='500+50', comment="分块策略")
+    avg_chunk_size = Column(Integer, default=500, comment="平均分块大小")
 
     # 关联关系
     content = relationship("FileContentModel", back_populates="file", uselist=False)
     chunks = relationship("FileChunkModel", back_populates="file", cascade="all, delete-orphan")
+
+    def mark_as_chunked(self, total_chunks: int, chunk_strategy: str = '500+50') -> None:
+        """
+        标记文件为已分块处理
+
+        Args:
+            total_chunks: 分块总数
+            chunk_strategy: 分块策略
+        """
+        self.is_chunked = True
+        self.total_chunks = total_chunks
+        self.chunk_strategy = chunk_strategy
+        self.avg_chunk_size = total_chunks if total_chunks > 0 else 500
+
+    def get_chunk_info(self) -> dict:
+        """
+        获取分块信息
+
+        Returns:
+            dict: 分块相关信息
+        """
+        return {
+            "is_chunked": self.is_chunked,
+            "total_chunks": self.total_chunks,
+            "chunk_strategy": self.chunk_strategy,
+            "avg_chunk_size": self.avg_chunk_size
+        }
+
+    @classmethod
+    def get_supported_chunk_strategies(cls) -> list:
+        """
+        获取支持的分块策略
+
+        Returns:
+            list: 支持的分块策略列表
+        """
+        return [
+            "500+50",    # 500字符块，50字符重叠
+            "1000+100",  # 1000字符块，100字符重叠
+            "2000+200",  # 2000字符块，200字符重叠
+            "custom"     # 自定义策略
+        ]
 
     def __repr__(self) -> str:
         """模型字符串表示"""
