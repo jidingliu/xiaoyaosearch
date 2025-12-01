@@ -437,24 +437,3 @@ class MetadataExtractor:
     def get_supported_formats(self) -> Dict[str, List[str]]:
         """获取支持的文件格式"""
         return self.supported_formats.copy()
-
-
-# 测试代码
-if __name__ == "__main__":
-    # 配置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-    # 测试元数据提取
-    extractor = MetadataExtractor()
-
-    # 测试当前目录的文件
-    for file_path in Path(".").glob("*"):
-        if file_path.is_file():
-            print(f"\n提取文件元数据: {file_path}")
-            metadata = extractor.extract_metadata(str(file_path))
-            for key, value in metadata.items():
-                if key not in ['exif', 'info', 'sheet_data']:  # 跳过详细数据
-                    print(f"  {key}: {value}")

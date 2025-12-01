@@ -19,21 +19,21 @@ try:
     from app.core.config import get_settings
     settings = get_settings()
 
-    def get_mvp_supported_extensions() -> Set[str]:
-        return settings.mvp.get_supported_extensions()
+    def get_default_supported_extensions() -> Set[str]:
+        return settings.default.get_supported_extensions()
 
-    def is_mvp_mode() -> bool:
-        return settings.mvp.is_mvp_mode()
+    def is_default_mode() -> bool:
+        return settings.default.is_default_mode()
 
     def get_file_type(extension: str) -> str:
-        return settings.mvp.get_file_type(extension)
+        return settings.default.get_file_type(extension)
 except ImportError:
     # 如果配置文件不存在，使用默认配置
-    def get_mvp_supported_extensions() -> Set[str]:
+    def get_default_supported_extensions() -> Set[str]:
         return set()
 
-    def is_mvp_mode() -> bool:
-        return False
+    def is_default_mode() -> bool:
+        return True
 
     def get_file_type(extension: str) -> str:
         return 'unknown'
@@ -63,10 +63,10 @@ class FileScanner:
     - 文件类型过滤
     - 基于哈希的变更检测
     - 增量扫描
-    - MVP模式配置
+    - 默认模式配置
     """
 
-    # 完整的文件类型支持（非MVP模式）
+    # 完整的文件类型支持（完整模式）
     FULL_SUPPORTED_EXTENSIONS = {
         # 文档类
         '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
@@ -87,13 +87,13 @@ class FileScanner:
     @property
     def DEFAULT_SUPPORTED_EXTENSIONS(self) -> Set[str]:
         """根据模式返回支持的文件扩展名"""
-        if is_mvp_mode():
-            mvp_extensions = get_mvp_supported_extensions()
-            if mvp_extensions:
-                logger.info(f"使用MVP模式，支持 {len(mvp_extensions)} 种文件格式")
-                return mvp_extensions
+        if is_default_mode():
+            default_extensions = get_default_supported_extensions()
+            if default_extensions:
+                logger.info(f"使用默认模式，支持 {len(default_extensions)} 种文件格式")
+                return default_extensions
             else:
-                logger.warning("MVP模式已启用但配置未找到，使用默认MVP格式")
+                logger.warning("默认模式已启用但配置未找到，使用默认格式")
                 return {
                     '.mp4', '.avi',  # 视频
                     '.mp3', '.wav',  # 音频
@@ -351,26 +351,3 @@ class FileScanner:
     def get_stats(self) -> Dict[str, int]:
         """获取扫描统计信息"""
         return self.stats.copy()
-
-
-# 测试代码
-if __name__ == "__main__":
-    # 配置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-    # 测试文件扫描
-    scanner = FileScanner(max_workers=2)
-
-    # 扫描当前目录
-    files = scanner.scan_directory(
-        ".",
-        recursive=True,
-        include_hidden=False,
-        progress_callback=lambda current, total: print(f"进度: {current}/{total}")
-    )
-
-    print(f"扫描到 {len(files)} 个支持的文件")
-    print(f"统计信息: {scanner.get_stats()}")

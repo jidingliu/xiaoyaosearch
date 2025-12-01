@@ -153,31 +153,25 @@ class DatabaseConfig(BaseSettings):
 
 
 class APIConfig(BaseSettings):
-    """API相关配置"""
-    host: str = Field(default="127.0.0.1", description="API服务主机")
-    port: int = Field(default=8000, description="API服务端口")
-    reload: bool = Field(default=True, description="是否启用热重载")
-    workers: int = Field(default=1, description="工作进程数")
-
-    # API限制配置
+    """API相关配置 - 简化版配置"""
+    # API限制配置（保留核心配置）
     max_search_results: int = Field(default=100, description="最大搜索结果数")
     default_search_results: int = Field(default=20, description="默认搜索结果数")
-    max_upload_size: int = Field(default=50*1024*1024, description="最大上传文件大小")
+
+    # 注意：host/port/reload/workers 配置已移至 main.py 硬编码
+    # 注意：max_upload_size 配置已移至 IndexConfig.max_file_size 统一管理
 
     class Config:
         env_prefix = "API_"
 
 
 class LoggingConfig(BaseSettings):
-    """日志相关配置"""
+    """日志相关配置 - 简化版配置"""
     level: str = Field(default="INFO", description="日志级别")
     file_path: Optional[str] = Field(default="../data/logs/app.log", description="日志文件路径")
-    max_file_size: int = Field(default=10*1024*1024, description="单个日志文件最大大小")
-    backup_count: int = Field(default=5, description="日志文件备份数量")
-    format: str = Field(
-        default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        description="日志格式"
-    )
+
+    # 注意：详细的日志配置（max_file_size, backup_count, format）在 main.py 中设置
+    # 此配置类主要用于环境变量覆盖核心设置
 
     class Config:
         env_prefix = "LOG_"
@@ -222,24 +216,13 @@ class AIConfig(BaseSettings):
             return "cpu"
 
 
-class SecurityConfig(BaseSettings):
-    """安全相关配置"""
-    secret_key: str = Field(default="xiaoyao-search-secret-key-change-in-production", description="应用密钥")
-    access_token_expire_minutes: int = Field(default=30, description="访问令牌过期时间(分钟)")
-    allowed_hosts: List[str] = Field(default=["localhost", "127.0.0.1"], description="允许的主机列表")
-    cors_origins: List[str] = Field(default=["http://localhost:3000"], description="允许的CORS源")
+class DefaultConfig(BaseSettings):
+    """默认配置"""
+    # 默认模式控制
+    default_mode: bool = Field(default=True, description="是否启用默认模式")
 
-    class Config:
-        env_prefix = "SECURITY_"
-
-
-class MVPConfig(BaseSettings):
-    """MVP阶段配置"""
-    # MVP环境控制
-    mvp_mode: bool = Field(default=True, description="是否启用MVP模式")
-
-    # MVP阶段支持的文件扩展名（PRD P0要求）
-    mvp_supported_extensions: List[str] = Field(
+    # 默认支持的文件扩展名（PRD P0要求）
+    supported_extensions: List[str] = Field(
         default=[
             # 视频类 - P0要求
             ".mp4", ".avi",
@@ -254,11 +237,11 @@ class MVPConfig(BaseSettings):
             # 文本文档
             ".txt", ".md",
         ],
-        description="MVP阶段支持的文件扩展名"
+        description="默认支持的文件扩展名"
     )
 
     # 文件类型分类
-    mvp_file_types: Dict[str, str] = Field(
+    file_types: Dict[str, str] = Field(
         default={
             ".mp4": "video",
             ".avi": "video",
@@ -281,7 +264,7 @@ class MVPConfig(BaseSettings):
     )
 
     # 格式友好显示名称
-    mvp_format_display_names: Dict[str, str] = Field(
+    format_display_names: Dict[str, str] = Field(
         default={
             ".mp4": "MP4视频",
             ".avi": "AVI视频",
@@ -304,19 +287,19 @@ class MVPConfig(BaseSettings):
     )
 
     class Config:
-        env_prefix = "MVP_"
+        env_prefix = "DEFAULT_"
 
     def get_supported_extensions(self) -> set:
-        """获取MVP支持的文件扩展名"""
-        return set(self.mvp_supported_extensions) if self.mvp_mode else set()
+        """获取默认支持的文件扩展名"""
+        return set(self.supported_extensions) if self.default_mode else set()
 
     def get_file_type(self, extension: str) -> str:
         """根据扩展名获取文件类型"""
-        return self.mvp_file_types.get(extension.lower(), "unknown")
+        return self.file_types.get(extension.lower(), "unknown")
 
     def get_format_display_name(self, extension: str) -> str:
         """获取格式友好显示名称"""
-        return self.mvp_format_display_names.get(extension.lower(), extension.upper())
+        return self.format_display_names.get(extension.lower(), extension.upper())
 
     def get_content_config(self, file_type: str) -> Dict[str, Any]:
         """根据文件类型获取内容提取配置"""
@@ -385,9 +368,9 @@ class MVPConfig(BaseSettings):
         }
         return parser_methods.get(extension.lower(), '')
 
-    def is_mvp_mode(self) -> bool:
-        """检查是否处于MVP模式"""
-        return self.mvp_mode
+    def is_default_mode(self) -> bool:
+        """检查是否处于默认模式"""
+        return self.default_mode
 
 
 class AppConfig(BaseSettings):
@@ -403,12 +386,12 @@ class AppConfig(BaseSettings):
     # 子配置
     index: IndexConfig = Field(default_factory=IndexConfig)
     chunk: ChunkConfig = Field(default_factory=ChunkConfig)
-    mvp: MVPConfig = Field(default_factory=MVPConfig)
+    default: DefaultConfig = Field(default_factory=DefaultConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
-    security: SecurityConfig = Field(default_factory=SecurityConfig)
+    # SecurityConfig 已移除 - 桌面应用无需安全认证配置
 
     class Config:
         env_file = ".env"
@@ -471,12 +454,9 @@ class AppConfig(BaseSettings):
             except Exception as e:
                 errors.append(f"无法创建数据目录 {self.index.data_root}: {e}")
 
-        # 验证文件大小限制
+        # 验证文件大小限制（统一使用 IndexConfig.max_file_size）
         if self.index.max_file_size <= 0:
             errors.append("最大文件大小必须大于0")
-
-        if self.api.max_upload_size <= 0:
-            errors.append("最大上传大小必须大于0")
 
         # 验证索引配置
         if self.index.vector_dimension <= 0:
@@ -507,78 +487,3 @@ def reload_settings():
     global settings
     settings = AppConfig()
     return settings
-
-
-# 环境变量配置示例
-def create_sample_env_file():
-    """创建示例环境变量文件"""
-    sample_env = """
-# 小遥搜索 - 环境变量配置示例
-
-# 应用配置
-APP_NAME=小遥搜索
-APP_VERSION=1.0.0
-DEBUG=True
-ENVIRONMENT=development
-
-# 索引配置
-INDEX_DATA_ROOT=../data
-INDEX_USE_CHINESE_ANALYZER=True
-INDEX_MAX_FILE_SIZE=104857600
-INDEX_SCANNER_MAX_WORKERS=4
-
-# 数据库配置
-DB_DATABASE_URL=sqlite:///../data/database/xiaoyao_search.db
-DB_ECHO=False
-
-# API配置
-API_HOST=127.0.0.1
-API_PORT=8000
-API_RELOAD=True
-
-# 日志配置
-LOG_LEVEL=INFO
-LOG_FILE_PATH=../data/logs/app.log
-
-# AI配置
-AI_DEFAULT_CLIP_MODEL=OFA-Sys/chinese-clip-vit-base-patch16
-AI_DEFAULT_BGE_MODEL=BAAI/bge-m3
-AI_MODELS_CACHE_DIR=../data/models
-
-# 云端API配置（可选）
-# AI_OPENAI_API_KEY=your_openai_api_key
-# AI_ALIYUN_ACCESS_KEY_ID=your_access_key_id
-# AI_ALIYUN_ACCESS_KEY_SECRET=your_access_key_secret
-
-# 安全配置
-SECURITY_SECRET_KEY=your-secret-key-change-in-production
-SECURITY_ACCESS_TOKEN_EXPIRE_MINUTES=30
-"""
-
-    try:
-        with open(".env.example", "w", encoding="utf-8") as f:
-            f.write(sample_env.strip())
-        print("示例环境变量文件已创建: .env.example")
-    except Exception as e:
-        print(f"创建示例环境变量文件失败: {e}")
-
-
-if __name__ == "__main__":
-    # 创建示例环境变量文件
-    create_sample_env_file()
-
-    # 测试配置加载
-    config = get_settings()
-    print("配置加载成功:")
-    print(f"  应用名称: {config.app_name}")
-    print(f"  数据根目录: {config.index.data_root}")
-    print(f"  数据库URL: {config.database.database_url}")
-
-    # 验证配置
-    errors = config.validate_config()
-    if errors:
-        print("\n配置验证错误:")
-        for error in errors:
-            print(f"  - {error}")
-    else:
-        print("\n配置验证通过")

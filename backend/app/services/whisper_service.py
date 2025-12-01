@@ -256,9 +256,15 @@ class WhisperTranscriptionService(BaseAIModel):
             # 检查音频时长
             try:
                 duration = librosa.get_duration(path=audio_input)
-                if duration > self.config.get("max_duration", 30):
+                # 获取最大时长限制，支持索引模式
+                max_duration = self.config.get("max_duration", 30)
+                if kwargs.get("indexing_mode", False):
+                    # 索引模式时支持更长的音频（10分钟）
+                    max_duration = 10 * 60  # 10分钟 = 600秒
+
+                if duration > max_duration:
                     raise AIModelException(
-                        f"音频时长过长，当前时长: {duration:.1f}秒，最大限制: {self.config['max_duration']}秒",
+                        f"音频时长过长，当前时长: {duration:.1f}秒，最大限制: {max_duration}秒",
                         model_name=self.model_name
                     )
             except Exception as e:

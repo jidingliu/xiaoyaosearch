@@ -23,16 +23,16 @@ try:
     settings = get_settings()
 
     def get_parser_method(extension: str) -> str:
-        return settings.mvp.get_parser_method(extension)
+        return settings.default.get_parser_method(extension)
 
     def get_content_config(file_type: str) -> Dict[str, Any]:
-        return settings.mvp.get_content_config(file_type)
+        return settings.default.get_content_config(file_type)
 
-    def is_mvp_mode() -> bool:
-        return settings.mvp.is_mvp_mode()
+    def is_default_mode() -> bool:
+        return settings.default.is_default_mode()
 
     def get_format_display_name(extension: str) -> str:
-        return settings.mvp.get_format_display_name(extension)
+        return settings.default.get_format_display_name(extension)
 except ImportError:
     # 如果配置文件不存在，使用默认配置
     def get_parser_method(extension: str) -> str:
@@ -41,8 +41,8 @@ except ImportError:
     def get_content_config(file_type: str) -> Dict[str, Any]:
         return {}
 
-    def is_mvp_mode() -> bool:
-        return False
+    def is_default_mode() -> bool:
+        return True
 
     def get_format_display_name(extension: str) -> str:
         return extension.upper()
@@ -100,13 +100,7 @@ class ParsedContent:
 class ContentParser:
     """内容解析器
 
-    支持从各种文件格式中提取文本内容：
-    MVP阶段支持：
-    - 文档类：PDF、Word、Excel、PowerPoint、TXT、Markdown
-    - 音视频类：仅提取元数据（内容提取为未来功能）
-    非MVP阶段支持：
-    - 文本类：TXT、Markdown、代码文件
-    - 预留接口：音视频转文字、图片OCR
+    支持从各种文件格式中提取文本内容
     """
 
     def __init__(self, max_content_length: int = 1024 * 1024):  # 1MB
@@ -116,10 +110,10 @@ class ContentParser:
             max_content_length: 最大内容长度限制（字符数）
         """
         self.max_content_length = max_content_length
-        self.mvp_mode = is_mvp_mode()
+        self.default_mode = is_default_mode()
 
-        if self.mvp_mode:
-            # MVP模式：只支持PRD要求的格式
+        if self.default_mode:
+            # 默认模式：只支持PRD要求的的核心格式
             self.supported_formats = {
                 # Office文档解析 (现代格式 + 经典格式)
                 '.pdf': self._parse_pdf,
@@ -142,7 +136,7 @@ class ContentParser:
                 '.jpg': self._parse_image_content,
                 '.jpeg': self._parse_image_content,
             }
-            logger.info("使用MVP模式，支持PRD要求的核心文件格式")
+            logger.info("使用默认模式，支持PRD要求的核心文件格式")
         else:
             # 完整模式：支持所有格式
             self.supported_formats = {
@@ -946,12 +940,12 @@ class ContentParser:
             # 使用librosa获取音频时长
             duration = librosa.get_duration(path=str(path))
 
-            # 处理15分钟时长限制
-            max_duration = 15 * 60  # 15分钟 = 900秒
+            # 处理10分钟时长限制（索引建立用）
+            max_duration = 10 * 60  # 10分钟 = 600秒，用于索引建立
             if duration > max_duration:
                 logger.info(f"音频文件时长超过限制: {duration:.1f}秒 > {max_duration}秒，将提取前{max_duration}秒内容")
 
-                # 使用临时文件截取前15分钟
+                # 使用临时文件截取前10分钟
                 try:
                     import tempfile
                     import subprocess
@@ -994,15 +988,17 @@ class ContentParser:
             try:
                 from app.services.ai_model_manager import ai_model_service
 
-                # 调用Whisper模型进行语音识别
+                # 调用Whisper模型进行语音识别（索引模式）
                 transcription_result = await ai_model_service.speech_to_text(
                     audio_path_for_transcription,
-                    language="zh"
+                    language="zh",
+                    indexing_mode=True  # 标记为索引模式，支持更长的音频
                 )
 
-                if transcription_result and transcription_result.get("success", False):
+                # 检查转录结果
+                if transcription_result and transcription_result.get("text", "").strip():
                     transcribed_text = transcription_result.get("text", "").strip()
-                    confidence = transcription_result.get("confidence", 0.0)
+                    confidence = transcription_result.get("avg_confidence", 0.0)
 
                     # 尝试提取元数据
                     metadata = await self._extract_audio_metadata_with_mutagen(path)
@@ -1028,7 +1024,12 @@ class ContentParser:
                         metadata=metadata
                     )
                 else:
-                    error_msg = transcription_result.get("error", "语音识别失败")
+                    # 检查转录结果是否存在但没有有效文本
+                    if transcription_result:
+                        error_msg = "转录结果为空或无有效文本"
+                    else:
+                        error_msg = "语音识别服务返回空结果"
+
                     logger.warning(f"语音识别失败: {path.name}, 错误: {error_msg}")
 
                     # 降级为元数据提取
@@ -1272,8 +1273,8 @@ class ContentParser:
 
             cap.release()
 
-            # 处理15分钟时长限制
-            max_duration = 15 * 60  # 15分钟 = 900秒
+            # 处理10分钟时长限制（索引建立用）
+            max_duration = 10 * 60  # 10分钟 = 600秒，用于索引建立
             if duration > max_duration:
                 logger.info(f"视频文件时长超过限制: {duration:.1f}秒 > {max_duration}秒，将提取前{max_duration}秒内容")
                 video_truncated = True
@@ -1314,15 +1315,17 @@ class ContentParser:
                 try:
                     from app.services.ai_model_manager import ai_model_service
 
-                    # 调用Whisper模型进行语音识别
+                    # 调用Whisper模型进行语音识别（索引模式）
                     transcription_result = await ai_model_service.speech_to_text(
                         temp_audio_path,
-                        language="zh"
+                        language="zh",
+                        indexing_mode=True  # 标记为索引模式，支持更长的音频
                     )
 
-                    if transcription_result and transcription_result.get("success", False):
+                    # 检查转录结果
+                    if transcription_result and transcription_result.get("text", "").strip():
                         transcribed_text = transcription_result.get("text", "").strip()
-                        confidence = transcription_result.get("confidence", 0.0)
+                        confidence = transcription_result.get("avg_confidence", 0.0)
 
                         logger.info(f"视频音频转录完成: {path.name}, 文本长度: {len(transcribed_text)}字符")
 
@@ -1349,7 +1352,12 @@ class ContentParser:
                             metadata=metadata
                         )
                     else:
-                        error_msg = transcription_result.get("error", "语音识别失败")
+                        # 检查转录结果是否存在但没有有效文本
+                        if transcription_result:
+                            error_msg = "转录结果为空或无有效文本"
+                        else:
+                            error_msg = "语音识别服务返回空结果"
+
                         logger.warning(f"视频语音识别失败: {path.name}, 错误: {error_msg}")
 
                         metadata = {
@@ -1913,28 +1921,3 @@ class ContentParser:
                 return ""
 
         return await loop.run_in_executor(None, paddle_ocr_sync)
-
-    
-
-# 测试代码
-if __name__ == "__main__":
-    # 配置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-    # 测试内容解析
-    parser = ContentParser()
-
-    # 测试当前目录的文件
-    for file_path in Path(".").glob("*"):
-        if file_path.is_file() and file_path.suffix in parser.get_supported_formats():
-            print(f"\n解析文件内容: {file_path}")
-            parsed = parser.parse_content(str(file_path))
-            print(f"标题: {parsed.title}")
-            print(f"语言: {parsed.language}")
-            print(f"编码: {parsed.encoding}")
-            print(f"置信度: {parsed.confidence}")
-            print(f"内容长度: {len(parsed.text)} 字符")
-            print(f"内容预览: {parsed.text[:200]}...")
