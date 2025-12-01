@@ -259,7 +259,10 @@ class ContentParser:
                     try:
                         page_text = page.extract_text()
                         if page_text.strip():
-                            text_parts.append(f"[页面 {page_num + 1}]\n{page_text}")
+                            # 清理PDF文本中的乱码和格式问题
+                            cleaned_text = self._clean_pdf_text(page_text)
+                            if cleaned_text.strip():
+                                text_parts.append(f"[页面 {page_num + 1}]\n{cleaned_text}")
                     except Exception as e:
                         logger.warning(f"提取PDF第{page_num + 1}页内容失败: {e}")
 
@@ -681,6 +684,84 @@ class ContentParser:
                     break
 
         return '\n'.join(comments)
+
+    def _clean_pdf_text(self, text: str) -> str:
+        """清理PDF文本中的乱码和格式问题"""
+        if not text:
+            return ""
+
+        import unicodedata
+
+        # 移除控制字符和不可见字符
+        cleaned_text = ''.join(char for char in text if unicodedata.category(char)[0] != 'C')
+
+        # 识别和移除重复的乱码模式
+        # 使用正则表达式匹配连续重复的相同乱码文本
+        import re
+
+        # 匹配连续重复的非正常文本模式（4次或以上重复）
+        def remove_repeated_garbage(text):
+            # 匹配4次或以上重复的相同文本片段
+            pattern = r'((.{2,20})\2{3,})'
+            return re.sub(pattern, '', text)
+
+        cleaned_text = remove_repeated_garbage(cleaned_text)
+
+        # 替换常见的PDF乱码字符
+        replacements = {
+            '�': '',  # 替换字符
+            '□': '',  # 方框乱码
+            '■': '',  # 实心方框
+            '▪': '',  # 小方块
+            '▫': '',  # 空心方块
+            '▬': '',  # 长方形
+            '▭': '',  # 空心长方形
+            '©': '(c)',  # 版权符号
+            '®': '(r)',  # 注册商标
+            '™': '(tm)',  # 商标
+        }
+
+        for old, new in replacements.items():
+            cleaned_text = cleaned_text.replace(old, new)
+
+        # 移除包含大量非中文、非英文、非数字字符的行（可能是乱码行）
+        lines = cleaned_text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            line = line.strip()
+            if line:
+                # 计算有效字符比例（中文、英文、数字、标点符号）
+                valid_chars = len(re.findall(r'[\u4e00-\u9fff\w\s.,;:!?()[\]{}"\'-]', line))
+                total_chars = len(line)
+
+                # 如果有效字符比例低于60%，可能是乱码行，跳过
+                if total_chars == 0 or valid_chars / total_chars >= 0.6:
+                    cleaned_lines.append(line)
+
+        # 清理多余的空白字符
+        cleaned_text = ' '.join(cleaned_lines)
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+
+        # 移除孤立的数字和字母（通常是PDF页码或页眉页脚）
+        lines = cleaned_text.split('\n')
+        final_lines = []
+        for line in lines:
+            line = line.strip()
+            # 跳过纯数字行或非常短的行（可能是页码）
+            if line and not (line.isdigit() or (len(line) <= 3 and line.isalnum())):
+                final_lines.append(line)
+
+        # 重新组合文本
+        final_text = ' '.join(final_lines)
+
+        # 最终清理多余空格和乱码模式
+        final_text = re.sub(r'\s+', ' ', final_text).strip()
+
+        # 移除开头和结尾的重复乱码文本
+        final_text = re.sub(r'^[^\u4e00-\u9fff\w]{10,}', '', final_text)
+        final_text = re.sub(r'[^\u4e00-\u9fff\w]{10,}$', '', final_text)
+
+        return final_text
 
     def _detect_language(self, text: str) -> str:
         """简单的语言检测"""
