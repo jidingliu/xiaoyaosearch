@@ -3,7 +3,7 @@
 提供SQLite数据库连接和会话管理
 """
 import os
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine, MetaData, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
@@ -71,6 +71,11 @@ def init_database() -> None:
         from app.models.index_job import IndexJobModel
         from app.models.app_settings import AppSettingsModel
 
+        # 禁用外键约束（SQLite软外键模式）
+        with engine.connect() as conn:
+            conn.execute(text("PRAGMA foreign_keys = OFF"))
+            conn.commit()
+
         # 创建所有表
         Base.metadata.create_all(bind=engine)
         logger.info(f"数据库表创建完成: {DATABASE_PATH}")
@@ -78,7 +83,7 @@ def init_database() -> None:
         # 初始化默认设置
         _init_default_settings()
 
-        logger.info(f"数据库初始化完成: {DATABASE_PATH}")
+        logger.info(f"数据库初始化完成: {DATABASE_PATH}（已禁用外键约束，使用软外键模式）")
 
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}")

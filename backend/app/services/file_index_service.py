@@ -17,15 +17,16 @@ from .file_scanner import FileScanner, FileInfo
 from .metadata_extractor import MetadataExtractor
 from .content_parser import ContentParser, ParsedContent
 
+logger = logging.getLogger(__name__)
+
 # 导入分块索引服务（主要索引服务）
 try:
     from .chunk_index_service import get_chunk_index_service
     CHUNK_INDEX_AVAILABLE = True
+    logger.info("分块索引服务导入成功")
 except ImportError as e:
     CHUNK_INDEX_AVAILABLE = False
     logger.warning(f"分块索引服务不可用: {e}")
-
-logger = logging.getLogger(__name__)
 
 
 class FileIndexService:
@@ -160,13 +161,25 @@ class FileIndexService:
                     'error': '没有成功处理的文档'
                 }
 
-            # 3. 构建索引（主要使用分块索引）
+            # 3. 先保存文件数据到数据库（确保分块服务能找到文件记录）
+            self.index_status['indexing_progress'] = 70.0
+            if progress_callback:
+                progress_callback("保存文件到数据库", 70.0)
+
+            logger.info(f"开始保存 {len(documents)} 个文件到数据库")
+            await self._save_files_to_database(all_files, documents)
+            logger.info("文件保存到数据库完成")
+
+            # 4. 构建索引（主要使用分块索引）
             self.index_status['indexing_progress'] = 80.0
             if progress_callback:
                 progress_callback("构建索引", 80.0)
 
             chunk_index_success = False
             index_success = False
+            index_error = None  # 用于记录详细的错误信息
+
+            logger.info(f"分块索引可用性检查: {CHUNK_INDEX_AVAILABLE}, 文档数量: {len(documents)}")
 
             if CHUNK_INDEX_AVAILABLE:
                 try:
@@ -175,23 +188,27 @@ class FileIndexService:
 
                     logger.info("开始构建分块索引")
                     chunk_index_service = get_chunk_index_service()
+                    logger.info("分块索引服务获取成功")
+
                     chunk_index_success = await chunk_index_service.build_chunk_indexes(documents)
+                    logger.info(f"分块索引构建完成，结果: {chunk_index_success}")
 
                     if chunk_index_success:
                         logger.info("分块索引构建成功")
                         index_success = True  # 分块索引成功代表整体成功
                     else:
                         logger.warning("分块索引构建失败")
+                        index_error = "分块索引构建失败：Faiss向量索引或Whoosh全文索引构建失败"
 
                 except Exception as e:
                     logger.error(f"构建分块索引失败: {e}")
+                    import traceback
+                    logger.error(f"详细错误信息: {traceback.format_exc()}")
                     chunk_index_success = False
+                    index_error = f"分块索引构建异常：{str(e)}"
             else:
-                logger.info("分块索引服务不可用，无法构建索引")
-
-            # 4. 保存文件数据到数据库
-            if index_success:
-                await self._save_files_to_database(all_files, documents)
+                logger.warning("分块索引服务不可用，无法构建索引")
+                index_error = "分块索引服务不可用：请检查依赖和配置"
 
             # 5. 更新缓存和状态
             if index_success:
@@ -223,7 +240,8 @@ class FileIndexService:
                 'duration_seconds': duration.total_seconds(),
                 'chunk_index_stats': chunk_index_stats,
                 'chunk_index_available': CHUNK_INDEX_AVAILABLE,
-                'chunk_index_success': chunk_index_success
+                'chunk_index_success': chunk_index_success,
+                'error': index_error  # 添加详细的错误信息
             }
 
         except Exception as e:

@@ -79,7 +79,7 @@ class AIModelModel(Base):
                 "config": {
                     "model_path": "embedding/BAAI/bge-m3",
                     "device": "cpu",
-                    "embedding_dim": 768,
+                    "embedding_dim": 1024,
                     "max_length": 8192,
                     "normalize_embeddings": True
                 }

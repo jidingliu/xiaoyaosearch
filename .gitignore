@@ -14,6 +14,8 @@ release/
 data/database/
 data/indexes/
 data/configs/
+data/test-data/
+data/uploads/
 
 # AI模型文件（体积大）
 data/models/

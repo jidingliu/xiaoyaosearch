@@ -13,6 +13,7 @@ from datetime import datetime
 import logging
 from pathlib import Path
 
+from app.utils.snowflake import generate_snowflake_id
 from app.core.logging_config import get_logger
 from app.services.chunk_service import get_chunk_service, ChunkInfo
 
@@ -244,26 +245,50 @@ class ChunkIndexService:
 
             logger.info(f"分块完成，共生成 {len(all_chunks)} 个分块")
 
-            # 2. 构建分块Faiss向量索引
-            if FAISS_AVAILABLE and self.use_ai_models and AI_MODEL_SERVICE_AVAILABLE:
-                faiss_success = await self._build_chunk_faiss_index(all_chunks)
+            # 2. 使用雪花算法生成唯一索引ID
+            faiss_index_ids = []
+            whoosh_doc_ids = []
+
+            if all_chunks:
+                logger.info("使用雪花算法生成唯一索引ID...")
+
+                # 为每个分块生成唯一的索引ID
+                for i, chunk in enumerate(all_chunks):
+                    # Faiss索引ID（不同机器ID避免重复）
+                    faiss_id = generate_snowflake_id(machine_id=1 + i % 1024)
+                    faiss_index_ids.append(faiss_id)
+
+                    # Whoosh文档ID（不同机器ID避免重复）
+                    whoosh_id = str(generate_snowflake_id(machine_id=1 + (i + 1000) % 1024))
+                    whoosh_doc_ids.append(whoosh_id)
+
+                logger.info(f"生成Faiss索引ID: {faiss_index_ids}")
+                logger.info(f"生成Whoosh文档ID: {whoosh_doc_ids}")
+
+            # 3. 构建分块Faiss向量索引（使用雪花ID）
+            if FAISS_AVAILABLE and self.use_ai_models and AI_MODEL_SERVICE_AVAILABLE and all_chunks:
+                logger.info(f"开始构建分块Faiss向量索引，分块数量: {len(all_chunks)}")
+                faiss_success = await self._build_chunk_faiss_index_with_ids(all_chunks, faiss_index_ids)
                 if not faiss_success:
                     logger.warning("分块Faiss索引构建失败，但继续构建其他索引")
+                    faiss_index_ids = []
             else:
                 logger.info("跳过分块Faiss索引构建（条件不满足）")
                 faiss_success = True
 
-            # 3. 构建分块Whoosh全文索引
-            if WHOOSH_AVAILABLE:
-                whoosh_success = await self._build_chunk_whoosh_index(all_chunks)
+            # 4. 构建分块Whoosh全文索引（使用雪花ID）
+            if WHOOSH_AVAILABLE and all_chunks:
+                logger.info(f"开始构建分块Whoosh全文索引，分块数量: {len(all_chunks)}")
+                whoosh_success = await self._build_chunk_whoosh_index_with_ids(all_chunks, whoosh_doc_ids)
                 if not whoosh_success:
                     logger.warning("分块Whoosh索引构建失败，但继续构建其他索引")
+                    whoosh_doc_ids = []
             else:
                 logger.info("跳过分块Whoosh索引构建（条件不满足）")
                 whoosh_success = True
 
-            # 4. 保存分块数据到数据库
-            db_success = await self._save_chunks_to_database(all_chunks)
+            # 5. 保存分块数据到数据库
+            db_success = await self._save_chunks_to_database(all_chunks, faiss_index_ids, whoosh_doc_ids)
             if not db_success:
                 logger.warning("分块数据保存失败，但索引构建已完成")
 
@@ -1197,6 +1222,251 @@ def get_chunk_index_service() -> ChunkIndexService:
 
     return _chunk_index_service
 
+
+async def _build_chunk_faiss_index_with_ids(self, chunks: List[Dict[str, Any]], pregenerated_ids: List[int]) -> bool:
+        """构建分块Faiss向量索引（使用预生成的雪花ID）
+
+        Args:
+            chunks: 分块列表
+            pregenerated_ids: 预生成的Faiss索引ID列表
+
+        Returns:
+            bool: 构建是否成功
+        """
+        try:
+            if len(chunks) != len(pregenerated_ids):
+                logger.error(f"分块数量({len(chunks)})与ID数量({len(pregenerated_ids)})不匹配")
+                return False
+
+            logger.info(f"开始构建分块Faiss索引（使用雪花ID），分块数量: {len(chunks)}")
+            start_time = time.time()
+
+            # 1. 批量生成向量嵌入（优化版）
+            embeddings = await self._generate_chunk_embeddings_optimized(chunks)
+            if not embeddings:
+                logger.error("向量嵌入生成失败")
+                return False
+
+            # 2. 创建优化的Faiss索引
+            if not embeddings:
+                logger.error("没有向量嵌入，无法创建索引")
+                return False
+
+            dimension = len(embeddings[0])
+            logger.info(f"Faiss索引维度: {dimension}")
+
+            # 创建Flat索引
+            index_type = 'IndexFlatIP'
+            index = faiss.IndexFlatIP(dimension)
+
+            # 3. 训练索引（如果需要）
+            if hasattr(index, 'train') and not index.is_trained:
+                logger.info("训练Faiss索引...")
+                embeddings_array = np.array(embeddings).astype('float32')
+                index.train(embeddings_array)
+
+            # 4. 添加向量到索引
+            embeddings_array = np.array(embeddings).astype('float32')
+            index.add(embeddings_array)
+
+            # 5. 保存索引到文件
+            index_dir = os.path.dirname(self.chunk_faiss_index_path)
+            if not os.path.exists(index_dir):
+                os.makedirs(index_dir, exist_ok=True)
+
+            faiss.write_index(index, self.chunk_faiss_index_path)
+
+            # 6. 保存元数据（包含雪花ID映射）
+            metadata = {
+                'index_type': index_type,
+                'dimension': dimension,
+                'total_chunks': len(chunks),
+                'created_at': datetime.now().isoformat(),
+                'pregenerated_snowflake_ids': pregenerated_ids,
+                'build_time_seconds': time.time() - start_time,
+                'embedding_batch_size': self.index_stats['embedding_batch_size']
+            }
+
+            metadata_path = self.chunk_faiss_index_path.replace('.faiss', '_metadata.pkl')
+            with open(metadata_path, 'wb') as f:
+                pickle.dump(metadata, f)
+
+            build_time = time.time() - start_time
+            logger.info(f"分块Faiss索引构建成功（雪花ID） - 类型: {index_type}, 维度: {dimension}, 分块数: {index.ntotal}, 耗时: {build_time:.2f}秒")
+            logger.info(f"使用雪花ID: {pregenerated_ids}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"构建分块Faiss索引失败: {e}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            return False
+
+    async def _build_chunk_whoosh_index_with_ids(self, chunks: List[Dict[str, Any]], pregenerated_ids: List[str]) -> bool:
+        """构建分块Whoosh全文索引（使用预生成的雪花ID）
+
+        Args:
+            chunks: 分块列表
+            pregenerated_ids: 预生成的Whoosh文档ID列表
+
+        Returns:
+            bool: 构建是否成功
+        """
+        try:
+            if len(chunks) != len(pregenerated_ids):
+                logger.error(f"分块数量({len(chunks)})与ID数量({len(pregenerated_ids)})不匹配")
+                return False
+
+            logger.info(f"开始构建分块Whoosh索引（使用雪花ID），分块数量: {len(chunks)}")
+            start_time = time.time()
+
+            # 清理旧索引
+            await self._cleanup_old_whoosh_index()
+
+            # 创建索引目录
+            index_dir = os.path.dirname(self.chunk_whoosh_index_path)
+            if not os.path.exists(index_dir):
+                os.makedirs(index_dir, exist_ok=True)
+
+            from whoosh.analysis import StandardAnalyzer
+            from whoosh import fields, index
+            from whoosh.writing import AsyncWriter
+
+            # 定义优化的分块索引schema
+            chunk_schema = fields.Schema(
+                # 基础标识字段
+                id=fields.ID(stored=True, unique=True),  # 雪花ID
+                chunk_id=fields.ID(stored=True, unique=True),  # 原始chunk_id
+                file_id=fields.ID(stored=True),
+                chunk_index=fields.NUMERIC(stored=True, sortable=True),
+
+                # 内容字段
+                content=fields.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                title=fields.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                content_stored=fields.STORED(),
+                content_preview=fields.STORED(),
+
+                # 元数据字段
+                file_name=fields.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                file_path=fields.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                file_type=fields.ID(stored=True),
+                file_size=fields.NUMERIC(stored=True, sortable=True),
+
+                # 位置和长度信息
+                start_position=fields.NUMERIC(stored=True, sortable=True),
+                end_position=fields.NUMERIC(stored=True, sortable=True),
+                content_length=fields.NUMERIC(stored=True, sortable=True),
+
+                # 时间字段
+                modified_time=fields.TEXT(stored=True),
+                created_at=fields.TEXT(stored=True),
+                indexed_at=fields.TEXT(stored=True),
+
+                # 搜索优化字段
+                keywords=fields.KEYWORD(stored=True, commas=True),
+
+                # 分块特定字段
+                chunk_type=fields.ID(stored=True),  # 'auto', 'manual', 'overlap'
+                chunk_strategy=fields.TEXT(stored=True, analyzer=StandardAnalyzer()),
+                overlap_info=fields.STORED()  # JSON格式的重叠信息
+            )
+
+            # 创建索引
+            ix = index.create_in(index_dir, chunk_schema)
+
+            # 批量写入优化
+            batch_size = self.index_stats.get('whoosh_batch_size', 100)
+            total_chunks = len(chunks)
+
+            writer = AsyncWriter(ix)
+            try:
+                # 分批处理
+                for batch_start in range(0, total_chunks, batch_size):
+                    batch_end = min(batch_start + batch_size, total_chunks)
+
+                    for i in range(batch_start, batch_end):
+                        chunk = chunks[i]
+                        snowflake_id = pregenerated_ids[i]
+
+                        # 验证必要字段
+                        if not chunk or not chunk.get('content'):
+                            logger.warning(f"跳过无效分块: {i}")
+                            continue
+
+                        content = chunk.get('content', '')
+                        if not content.strip():
+                            logger.warning(f"跳过空内容分块: {i}")
+                            continue
+
+                        # 解析修改时间
+                        modified_time = chunk.get('modified_time', datetime.now())
+                        if isinstance(modified_time, str):
+                            try:
+                                modified_time = datetime.fromisoformat(modified_time.replace('Z', '+00:00'))
+                            except:
+                                modified_time = datetime.now()
+
+                        # 提取关键词
+                        keywords = []
+                        if 'keywords' in chunk:
+                            keywords = chunk['keywords']
+                        elif len(content) > 100:
+                            import re
+                            words = re.findall(r'\b\w{3,}\b', content.lower())
+                            word_freq = {}
+                            for word in words:
+                                if len(word) >= 3:
+                                    word_freq[word] = word_freq.get(word, 0) + 1
+                            keywords = [word for word, freq in sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:10]]
+
+                        # 生成内容预览
+                        content_preview = content[:200] + "..." if len(content) > 200 else content
+
+                        # 构建文档数据（使用雪花ID）
+                        writer.add_document(
+                            id=str(snowflake_id),  # 使用雪花ID作为文档ID，确保为字符串
+                            chunk_id=str(chunk.get('chunk_id', f"chunk_{i}")),
+                            file_id=str(chunk.get('file_id', 'unknown')),
+                            chunk_index=int(chunk.get('chunk_index', i)),
+                            content=content,
+                            content_stored=content,
+                            start_position=int(chunk.get('start_position', 0)),
+                            end_position=int(chunk.get('end_position', len(content))),
+                            content_length=int(chunk.get('content_length', len(content))),
+                            modified_time=str(modified_time),
+                            created_at=str(chunk.get('created_at', datetime.now().isoformat())),
+                            title=str(chunk.get('title', '')),
+                            keywords=','.join(keywords) if keywords else '',
+                            content_preview=content_preview
+                        )
+
+                    # 批量提交
+                    writer.commit()
+
+                    # 重新获取writer进行下一批处理
+                    writer = AsyncWriter(ix)
+
+                    # 进度日志
+                    progress = (batch_end / total_chunks) * 100
+                    logger.info(f"Whoosh索引进度: {batch_end}/{total_chunks} ({progress:.1f}%)")
+
+                build_time = time.time() - start_time
+                logger.info(f"分块Whoosh索引构建成功（雪花ID） - 分块数: {total_chunks}, 耗时: {build_time:.2f}秒")
+                logger.info(f"使用雪花ID: {pregenerated_ids}")
+
+                return True
+
+            except Exception as e:
+                if writer:
+                    writer.cancel()
+                raise e
+
+        except Exception as e:
+            logger.error(f"构建分块Whoosh索引失败: {e}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            return False
 
 def reload_chunk_index_service():
     """重新加载分块索引服务"""

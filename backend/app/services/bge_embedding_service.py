@@ -30,7 +30,7 @@ class BGEEmbeddingService(BaseAIModel):
     BGE-M3文本嵌入服务
 
     BGE-M3是BAAI开发的多语言、多粒度、多功能嵌入模型
-    特别针对中文优化，支持768维向量输出
+    特别针对中文优化，支持1024维向量输出
     """
 
     def __init__(self, config: Dict[str, Any] = None):
@@ -268,8 +268,14 @@ class BGEEmbeddingService(BaseAIModel):
             # 手动使用Transformers编码
             embeddings = self._encode_with_transformers(texts, batch_size, normalize_embeddings)
 
-        # BGE-M3输出完整的1024维向量，不需要截断
-        logger.info(f"生成 {embeddings.shape[1]} 维嵌入向量")
+        # BGE-M3实际输出1024维向量，更新验证逻辑
+        embedding_dim = embeddings.shape[1]
+        if embedding_dim == 1024:
+            logger.info(f"✅ BGE-M3正确生成 {embedding_dim} 维嵌入向量")
+        elif embedding_dim == 768:
+            logger.info(f"✅ BGE-M3生成 {embedding_dim} 维嵌入向量（标准模式）")
+        else:
+            logger.warning(f"⚠️ BGE-M3嵌入维度异常: {embedding_dim} (期望1024维)")
 
         return embeddings
 

@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(\".\\venv\\Scripts\\python.exe\" -c \"\nprint(''=== 最终配置系统集成测试 ==='')\n\n# 测试统一配置系统\nfrom app.core.config import get_settings\nsettings = get_settings()\nprint(''[OK] 核心配置系统加载'')\nprint(''  - 应用名称:'', settings.app_name)\nprint(''  - 分块默认大小:'', settings.chunk.default_chunk_size)\nprint(''  - MVP模式:'', settings.mvp.mvp_mode)\nprint(''  - 支持文件数:'', len(settings.mvp.mvp_supported_extensions))\n\n# 测试分块服务\nfrom app.services.chunk_service import ChunkService\nchunk_service = ChunkService()\nprint(''[OK] 分块服务使用统一配置'')\nprint(''  - 默认分块大小:'', chunk_service.default_chunk_size)\nprint(''  - 默认重叠大小:'', chunk_service.default_overlap)\n\n# 测试文件扫描器\nfrom app.services.file_scanner import get_mvp_supported_extensions, is_mvp_mode\nextensions = get_mvp_supported_extensions()\nprint(''[OK] 文件扫描器使用统一配置'')\nprint(''  - 支持扩展名数量:'', len(extensions))\nprint(''  - MVP模式状态:'', is_mvp_mode())\n\n# 测试内容解析器\nfrom app.services.content_parser import get_parser_method\nmethod = get_parser_method(''.pdf'')\nprint(''[OK] 内容解析器使用统一配置'')\nprint(''  - PDF解析方法:'', method)\n\nprint(''=== 所有配置系统统一更新完成！ ==='')\n\")"
+      "Bash(.venvScriptspython.exe:*)",
+      "Bash(dir:*)",
+      "Bash(Get-Command .venvScriptspython.exe)",
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell \"Stop-Process -Name python -Force\")",
+      "Bash(netstat:*)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []

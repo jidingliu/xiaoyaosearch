@@ -1,10 +1,9 @@
 """
 文件索引数据模型
-定义文件索引的数据库表结构
+定义文件索引的数据库表结构（软外键模式）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, BigInteger, Boolean, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, BigInteger, Boolean, Float
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 from datetime import datetime
 
@@ -27,10 +26,6 @@ class FileModel(Base):
     modified_at = Column(DateTime, nullable=False, comment="文件修改时间")
     indexed_at = Column(DateTime, nullable=False, default=func.now(), comment="索引时间")
     content_hash = Column(String(64), nullable=False, comment="文件内容哈希(用于变更检测)")
-    # 索引相关字段
-    faiss_index_id = Column(Integer, nullable=True, comment="关联Faiss向量索引ID")
-    whoosh_doc_id = Column(String(64), nullable=True, comment="关联Whoosh文档ID")
-
     # 文件处理状态
     is_indexed = Column(Boolean, default=False, comment="是否已索引")
     is_content_parsed = Column(Boolean, default=False, comment="是否已解析内容")
@@ -76,8 +71,6 @@ class FileModel(Base):
             "modified_at": self.modified_at.isoformat() if self.modified_at else None,
             "indexed_at": self.indexed_at.isoformat() if self.indexed_at else None,
             "content_hash": self.content_hash,
-            "faiss_index_id": self.faiss_index_id,
-            "whoosh_doc_id": self.whoosh_doc_id,
             "is_indexed": self.is_indexed,
             "is_content_parsed": self.is_content_parsed,
             "index_status": self.index_status,
@@ -300,9 +293,8 @@ class FileModel(Base):
     chunk_strategy = Column(String(50), default='500+50', comment="分块策略")
     avg_chunk_size = Column(Integer, default=500, comment="平均分块大小")
 
-    # 关联关系
-    content = relationship("FileContentModel", back_populates="file", uselist=False)
-    chunks = relationship("FileChunkModel", back_populates="file", cascade="all, delete-orphan")
+    # 注意：软外键模式下不定义SQLAlchemy relationship
+    # 关联关系由应用层通过file_id字段手动维护
 
     def mark_as_chunked(self, total_chunks: int, chunk_strategy: str = '500+50') -> None:
         """

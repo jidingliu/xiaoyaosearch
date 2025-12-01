@@ -1,10 +1,9 @@
 """
 文件内容数据模型
-定义文件解析后的内容存储结构
+定义文件解析后的内容存储结构（软外键模式）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, Boolean
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 from datetime import datetime
 
@@ -18,7 +17,7 @@ class FileContentModel(Base):
     __tablename__ = "file_content"
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键ID")
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, unique=True, comment="关联文件ID")
+    file_id = Column(Integer, nullable=False, unique=True, comment="关联文件ID（软外键，应用层维护）")
 
     # 解析内容
     title = Column(String(500), nullable=True, comment="提取的标题")
@@ -41,8 +40,8 @@ class FileContentModel(Base):
     parsed_at = Column(DateTime, nullable=True, comment="解析时间")
     updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now(), comment="更新时间")
 
-    # 关联关系
-    file = relationship("FileModel", back_populates="content")
+    # 注意：软外键模式下不定义SQLAlchemy relationship
+    # 关联关系由应用层通过file_id字段手动维护
 
     def to_dict(self) -> dict:
         """

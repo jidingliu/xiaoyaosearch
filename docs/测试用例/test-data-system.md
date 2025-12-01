@@ -126,7 +126,7 @@ curl -X GET "http://127.0.0.1:8000/api/system/health" \
         "status": "ready",
         "document_count": 15420,
         "index_size": "2313000KB",
-        "dimension": 768,
+        "dimension": 1024,
         "last_updated": "2024-01-20T15:30:00.123456"
       },
       "whoosh_index": {

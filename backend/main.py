@@ -15,7 +15,8 @@ from app.api import (
     index_router,
     config_router,
     system_router,
-    websocket_router
+    websocket_router,
+    database_router
 )
 
 # 配置日志系统
@@ -41,15 +42,21 @@ async def lifespan(app: FastAPI):
         init_database()
         logger.info("数据库初始化完成")
 
-              # 初始化AI模型服务
+            # 初始化AI模型服务
         logger.info("加载AI模型...")
         try:
             from app.services.ai_model_manager import ai_model_service
             await ai_model_service.initialize()
+            ai_model_service._initialized = True  # 设置初始化标志
             logger.info("AI模型服务加载完成")
         except Exception as e:
             logger.warning(f"AI模型服务初始化失败: {str(e)}")
             logger.info("继续运行，但AI功能可能不可用")
+            # 确保即使初始化失败也设置标志，避免重复尝试
+            try:
+                ai_model_service._initialized = False
+            except:
+                pass
 
         logger.info("✅ 小遥搜索服务启动完成")
         logger.info(f"📖 API文档: http://127.0.0.1:8000/docs")
@@ -106,6 +113,7 @@ app.include_router(index_router)
 app.include_router(config_router)
 app.include_router(system_router)
 app.include_router(websocket_router)
+app.include_router(database_router)
 
 # 根路径
 @app.get("/")

@@ -884,6 +884,93 @@ class ContentParser:
 
         return metadata
 
+    def _parse_audio_metadata(self, path: Path) -> ParsedContent:
+        """解析音频文件元数据（同步方法，用于索引服务检查）"""
+        try:
+            format_name = get_format_display_name(path.suffix)
+            metadata = {
+                "format": "audio",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size,
+                "transcribed": False,
+                "metadata_only": True
+            }
+
+            return ParsedContent(
+                text=f"[{format_name} 音频文件] - 元数据已记录",
+                title=path.stem,
+                language="metadata",
+                confidence=0.5,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"音频元数据解析失败: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "audio", "error": str(e)}
+            )
+
+    def _parse_video_metadata(self, path: Path) -> ParsedContent:
+        """解析视频文件元数据（同步方法，用于索引服务检查）"""
+        try:
+            format_name = get_format_display_name(path.suffix)
+            metadata = {
+                "format": "video",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size,
+                "transcribed": False,
+                "metadata_only": True
+            }
+
+            return ParsedContent(
+                text=f"[{format_name} 视频文件] - 元数据已记录",
+                title=path.stem,
+                language="metadata",
+                confidence=0.5,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"视频元数据解析失败: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "video", "error": str(e)}
+            )
+
+    def _parse_image_content(self, path: Path) -> ParsedContent:
+        """解析图片文件内容（同步方法，用于索引服务检查）"""
+        try:
+            format_name = get_format_display_name(path.suffix)
+            metadata = {
+                "format": "image",
+                "file_extension": path.suffix.lower(),
+                "file_size": path.stat().st_size,
+                "content_analyzed": False,
+                "metadata_only": True
+            }
+
+            return ParsedContent(
+                text=f"[{format_name} 图片文件] - 元数据已记录",
+                title=path.stem,
+                language="metadata",
+                confidence=0.5,
+                metadata=metadata
+            )
+        except Exception as e:
+            logger.error(f"图片内容解析失败: {e}")
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "image", "error": str(e)}
+            )
+
     def _parse_audio_metadata_fallback(self, path: Path, duration: float = None) -> ParsedContent:
         """音频解析降级方案：仅提取元数据"""
         try:

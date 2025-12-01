@@ -7,6 +7,13 @@ import logging
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+    np = None
+
 logger = logging.getLogger(__name__)
 
 from app.services.ai_model_base import BaseAIModel, ModelType, ProviderType, ModelStatus, ModelManager, AIModelException
@@ -307,15 +314,38 @@ class AIModelService:
             batch_texts = texts[i:i + batch_size]
             try:
                 batch_embeddings = await self.text_embedding(batch_texts, **kwargs)
-                if isinstance(batch_embeddings, list):
-                    all_embeddings.extend(batch_embeddings)
+
+                # 处理numpy数组返回值
+                if NUMPY_AVAILABLE and np is not None and isinstance(batch_embeddings, np.ndarray):
+                    if batch_embeddings.ndim == 2:
+                        # 标准情况: (batch_size, embedding_dim)
+                        batch_list = batch_embeddings.tolist()
+                        all_embeddings.extend(batch_list)
+                    elif batch_embeddings.ndim == 1:
+                        # 单个向量: (embedding_dim,)
+                        all_embeddings.append(batch_embeddings.tolist())
+                    else:
+                        # 多维数组，展平处理
+                        flattened = [emb.flatten().tolist() for emb in batch_embeddings]
+                        all_embeddings.extend(flattened)
+                elif isinstance(batch_embeddings, list):
+                    # 如果是列表，需要检查元素类型
+                    for emb in batch_embeddings:
+                        if NUMPY_AVAILABLE and np is not None and isinstance(emb, np.ndarray):
+                            if emb.ndim > 1:
+                                all_embeddings.append(emb.flatten().tolist())
+                            else:
+                                all_embeddings.append(emb.tolist())
+                        else:
+                            all_embeddings.append(emb)
                 else:
-                    # 如果返回单个向量，转换为列表
+                    # 其他类型，直接添加
                     all_embeddings.append(batch_embeddings)
+
             except Exception as e:
                 logger.error(f"批量嵌入处理失败 (批次 {i//batch_size + 1}): {str(e)}")
                 # 使用零向量作为fallback
-                dummy_embedding = [0.0] * 1024  # 假设1024维
+                dummy_embedding = [0.0] * 1024  # BGE-M3标准维度
                 for _ in batch_texts:
                     all_embeddings.append(dummy_embedding)
 

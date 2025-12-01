@@ -1,10 +1,9 @@
 """
 文件分块数据模型
-定义文件分块索引的数据库表结构
+定义文件分块索引的数据库表结构（软外键模式）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 from datetime import datetime
 
@@ -19,7 +18,7 @@ class FileChunkModel(Base):
 
     # 主键和关联
     id = Column(Integer, primary_key=True, autoincrement=True, comment="主键ID")
-    file_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"), nullable=False, comment="关联文件ID")
+    file_id = Column(Integer, nullable=False, comment="关联文件ID（软外键，应用层维护）")
     chunk_index = Column(Integer, nullable=False, comment="分块索引（从0开始）")
 
     # 分块内容
@@ -40,8 +39,8 @@ class FileChunkModel(Base):
     created_at = Column(DateTime, nullable=False, default=func.now(), comment="创建时间")
     indexed_at = Column(DateTime, nullable=True, comment="索引完成时间")
 
-    # 关联关系
-    file = relationship("FileModel", back_populates="chunks")
+    # 注意：软外键模式下不定义SQLAlchemy relationship
+    # 关联关系由应用层通过file_id字段手动维护
 
     def to_dict(self) -> dict:
         """
