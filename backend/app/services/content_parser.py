@@ -334,68 +334,172 @@ class ContentParser:
 
     def _parse_excel(self, path: Path) -> ParsedContent:
         """解析Excel文件内容"""
-        if not EXCEL_AVAILABLE:
-            return ParsedContent(text="", error="Excel解析库不可用")
-
         try:
-            # 根据文件大小决定读取模式
-            file_size = path.stat().st_size
-            use_read_only = file_size > 50 * 1024 * 1024  # 50MB以上使用read_only模式
-
-            if use_read_only:
-                workbook = load_workbook(str(path), read_only=True)
-            else:
-                workbook = load_workbook(str(path), read_only=False, data_only=True)
-
             text_parts = []
             total_data_rows = 0
+            parser_used = "unknown"
 
-            for sheet_name in workbook.sheetnames:
-                sheet = workbook[sheet_name]
-                sheet_data = []
+            # 根据文件扩展名选择解析库
+            if path.suffix.lower() == '.xls':
+                # 使用xlrd处理.xls文件
+                try:
+                    import xlrd
+                    workbook = xlrd.open_workbook(str(path))
+                    parser_used = "xlrd"
 
-                # 检查工作表大小
-                max_row = sheet.max_row if hasattr(sheet, 'max_row') else 1
+                    for sheet_idx in range(workbook.nsheets):
+                        sheet = workbook.sheet_by_index(sheet_idx)
+                        sheet_data = []
 
-                # 限制处理的最大行数，防止内存溢出
-                max_process_rows = min(1000, max_row)  # 最多处理1000行
+                        # 限制处理的最大行数
+                        max_process_rows = min(1000, sheet.nrows)
 
-                for row_idx, row in enumerate(sheet.iter_rows(values_only=True, max_row=max_process_rows)):
-                    # 过滤空行
-                    if any(cell is not None and str(cell).strip() for cell in row):
-                        row_text = []
-                        for cell in row:
-                            if cell is not None:
-                                cell_str = str(cell).strip()
-                                if cell_str:
-                                    row_text.append(cell_str)
-                        if row_text:
-                            sheet_data.append(" | ".join(row_text))
-                            total_data_rows += 1
+                        for row_idx in range(max_process_rows):
+                            row_data = []
+                            has_content = False
 
-                    # 如果处理了足够的行，提前结束
-                    if row_idx >= max_process_rows - 1:
-                        break
+                            for col_idx in range(sheet.ncols):
+                                cell = sheet.cell(row_idx, col_idx)
+                                cell_value = None
 
-                # 添加工作表信息
-                if sheet_data:
-                    header = f"[工作表: {sheet_name} (显示前{len(sheet_data)}行数据)]"
-                    text_parts.append(header + "\n" + "\n".join(sheet_data))
+                                # 处理不同类型的单元格
+                                if cell.ctype == xlrd.XL_CELL_TEXT:
+                                    cell_value = str(cell.value)
+                                elif cell.ctype == xlrd.XL_CELL_NUMBER:
+                                    # 检查是否为整数
+                                    if cell.value.is_integer():
+                                        cell_value = str(int(cell.value))
+                                    else:
+                                        cell_value = str(cell.value)
+                                elif cell.ctype == xlrd.XL_CELL_DATE:
+                                    # 处理日期
+                                    try:
+                                        date_tuple = xlrd.xldate_as_tuple(cell.value, workbook.datemode)
+                                        cell_value = f"{date_tuple[0]}-{date_tuple[1]:02d}-{date_tuple[2]:02d}"
+                                    except:
+                                        cell_value = str(cell.value)
+                                elif cell.ctype == xlrd.XL_CELL_BOOLEAN:
+                                    cell_value = "是" if cell.value else "否"
+                                elif cell.ctype in [xlrd.XL_CELL_BLANK, xlrd.XL_CELL_EMPTY]:
+                                    continue
+                                else:
+                                    cell_value = str(cell.value)
 
-                    # 如果有更多数据未显示，添加说明
-                    if max_row > max_process_rows:
-                        remaining_rows = max_row - max_process_rows
-                        text_parts.append(f"\n... (还有 {remaining_rows:,} 行数据未显示)")
-                else:
-                    # 检查是否有表头等基础信息
-                    try:
-                        first_row = next(sheet.iter_rows(values_only=True), None)
-                        if first_row and any(cell is not None and str(cell).strip() for cell in first_row):
-                            header_text = " | ".join(str(cell).strip() for cell in first_row if cell and str(cell).strip())
-                            text_parts.append(f"[工作表: {sheet_name} - 表头]\n" + header_text)
-                            total_data_rows += 1
-                    except:
-                        pass
+                                if cell_value and cell_value.strip():
+                                    row_data.append(cell_value.strip())
+                                    has_content = True
+
+                            if has_content and row_data:
+                                sheet_data.append(" | ".join(row_data))
+                                total_data_rows += 1
+
+                        # 添加工作表信息
+                        if sheet_data:
+                            header = f"[工作表: {sheet.name} (显示前{len(sheet_data)}行数据)]"
+                            text_parts.append(header + "\n" + "\n".join(sheet_data))
+
+                            # 如果有更多数据未显示，添加说明
+                            if sheet.nrows > max_process_rows:
+                                remaining_rows = sheet.nrows - max_process_rows
+                                text_parts.append(f"\n... (还有 {remaining_rows:,} 行数据未显示)")
+
+                except ImportError:
+                    logger.warning("xlrd库不可用，无法处理.xls文件")
+                    return ParsedContent(
+                        text=f"[Excel文档(.xls)] - 需要安装xlrd库: pip install xlrd",
+                        title=path.stem,
+                        language="metadata",
+                        confidence=0.1,
+                        metadata={
+                            "format": "xls",
+                            "file_extension": path.suffix,
+                            "file_size": path.stat().st_size,
+                            "parser": "fallback",
+                            "note": "请安装xlrd库: pip install xlrd"
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"使用xlrd解析Excel文件失败: {e}")
+                    raise e
+
+            elif path.suffix.lower() == '.xlsx':
+                # 使用openpyxl处理.xlsx文件
+                try:
+                    from openpyxl import load_workbook
+                    workbook = load_workbook(str(path), read_only=True, data_only=True)
+                    parser_used = "openpyxl"
+
+                    for sheet_name in workbook.sheetnames:
+                        sheet = workbook[sheet_name]
+                        sheet_data = []
+
+                        # 检查工作表大小
+                        max_row = sheet.max_row if hasattr(sheet, 'max_row') else 1
+
+                        # 限制处理的最大行数，防止内存溢出
+                        max_process_rows = min(1000, max_row)
+
+                        for row_idx, row in enumerate(sheet.iter_rows(values_only=True, max_row=max_process_rows)):
+                            # 过滤空行
+                            if any(cell is not None and str(cell).strip() for cell in row):
+                                row_text = []
+                                for cell in row:
+                                    if cell is not None:
+                                        cell_str = str(cell).strip()
+                                        if cell_str:
+                                            row_text.append(cell_str)
+                                if row_text:
+                                    sheet_data.append(" | ".join(row_text))
+                                    total_data_rows += 1
+
+                            # 如果处理了足够的行，提前结束
+                            if row_idx >= max_process_rows - 1:
+                                break
+
+                        # 添加工作表信息
+                        if sheet_data:
+                            header = f"[工作表: {sheet_name} (显示前{len(sheet_data)}行数据)]"
+                            text_parts.append(header + "\n" + "\n".join(sheet_data))
+
+                            # 如果有更多数据未显示，添加说明
+                            if max_row > max_process_rows:
+                                remaining_rows = max_row - max_process_rows
+                                text_parts.append(f"\n... (还有 {remaining_rows:,} 行数据未显示)")
+
+                except ImportError:
+                    logger.warning("openpyxl库不可用，无法处理.xlsx文件")
+                    return ParsedContent(
+                        text=f"[Excel文档(.xlsx)] - 需要安装openpyxl库: pip install openpyxl",
+                        title=path.stem,
+                        language="metadata",
+                        confidence=0.1,
+                        metadata={
+                            "format": "xlsx",
+                            "file_extension": path.suffix,
+                            "file_size": path.stat().st_size,
+                            "parser": "fallback",
+                            "note": "请安装openpyxl库: pip install openpyxl"
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"使用openpyxl解析Excel文件失败: {e}")
+                    raise e
+
+            else:
+                # 不支持的Excel格式
+                return ParsedContent(
+                    text=f"[Excel文档] - 不支持的格式: {path.suffix}，仅支持.xls和.xlsx",
+                    title=path.stem,
+                    language="metadata",
+                    confidence=0.1,
+                    metadata={
+                        "format": "unknown",
+                        "file_extension": path.suffix,
+                        "file_size": path.stat().st_size,
+                        "parser": "fallback",
+                        "supported_formats": [".xls", ".xlsx"]
+                    }
+                )
 
             text = "\n\n".join(text_parts)
 
@@ -403,12 +507,26 @@ class ContentParser:
                 text=text if text else f"[Excel文档: {path.name} - 暂无可提取的文本内容]",
                 title=f"Excel文档 - {path.name}",
                 language=self._detect_language(text) if text else "zh",
-                confidence=0.8 if total_data_rows > 0 else 0.3
+                confidence=0.8 if total_data_rows > 0 else 0.3,
+                metadata={
+                    "format": path.suffix,
+                    "file_extension": path.suffix,
+                    "file_size": path.stat().st_size,
+                    "parser": parser_used,
+                    "total_rows": total_data_rows,
+                    "sheets_count": len(text_parts)
+                }
             )
 
         except Exception as e:
             logger.error(f"解析Excel文件失败 {path}: {e}")
-            return ParsedContent(text="", error=str(e))
+            return ParsedContent(
+                text="",
+                title=None,
+                language="metadata",
+                confidence=0.0,
+                metadata={"format": "excel", "error": str(e)}
+            )
 
     def _parse_pptx(self, path: Path) -> ParsedContent:
         """解析PowerPoint文档内容"""
