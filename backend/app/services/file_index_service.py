@@ -455,6 +455,9 @@ class FileIndexService:
                             db.flush()  # 获取ID
                             db_file = file_record
 
+                        # 更新文档中的id为数据库整数ID，供分块服务使用
+                        document['id'] = db_file.id
+
                         # 创建文件内容记录（即使内容为空也创建，用于跟踪处理状态）
                         content_text = document.get('content', '')
                         has_error = 'error' in document.get('metadata', {})
