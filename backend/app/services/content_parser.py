@@ -1438,23 +1438,22 @@ class ContentParser:
     def _parse_doc(self, path: Path) -> ParsedContent:
         """解析经典Word文档 (.doc)"""
         try:
-            # 使用python-docx2txt处理经典Word文档
-            # 注意：对于真正的.doc格式，需要使用antiword或python-docx2txt的扩展功能
+            import subprocess
+            import tempfile
+            import os
+
+            # 方法1: 尝试使用doc2text库（推荐方案）
             try:
-                import subprocess
-                import tempfile
-                import os
+                from doc2text import docx2text
 
-                # 尝试使用antiword工具（如果可用）
-                antiword_cmd = ['antiword', str(path)]
-                result = subprocess.run(antiword_cmd, capture_output=True, text=True, timeout=30)
+                # 使用doc2text处理.doc文件
+                text = docx2text.process(str(path), keep_color_text=False)
 
-                if result.returncode == 0:
-                    text = result.stdout.strip()
-                    logger.info(f"经典Word文档解析成功: {path.name}, 文本长度: {len(text)}字符")
+                if text and text.strip():
+                    logger.info(f"doc2text解析成功: {path.name}, 文本长度: {len(text)}字符")
 
                     return ParsedContent(
-                        text=text,
+                        text=text.strip(),
                         title=path.stem,
                         language="zh" if self._is_chinese_text(text) else "en",
                         confidence=0.8,
@@ -1462,30 +1461,132 @@ class ContentParser:
                             "format": "doc",
                             "file_extension": ".doc",
                             "file_size": path.stat().st_size,
-                            "parser": "antiword"
+                            "parser": "doc2text"
                         }
                     )
                 else:
-                    logger.warning(f"antiword解析失败: {result.stderr}")
-                    raise Exception("antiword工具不可用")
+                    raise Exception("doc2text解析结果为空")
 
-            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-                logger.warning(f"antiword工具不可用或解析失败: {e}")
+            except ImportError:
+                logger.warning("doc2text库不可用，尝试其他解析方法")
+            except Exception as e:
+                logger.warning(f"doc2text解析失败: {e}")
 
-                # 降级处理：仅提取元数据
-                return ParsedContent(
-                    text=f"[经典Word文档] - 内容提取功能暂不可用，请安装antiword工具",
-                    title=path.stem,
-                    language="metadata",
-                    confidence=0.3,
-                    metadata={
-                        "format": "doc",
-                        "file_extension": ".doc",
-                        "file_size": path.stat().st_size,
-                        "parser": "fallback",
-                        "note": "需要安装antiword工具以支持内容提取"
-                    }
-                )
+            # 方法2: 尝试使用docx2txt库
+            try:
+                import docx2txt
+
+                # 使用docx2txt处理.doc文件
+                text = docx2txt.process(str(path))
+
+                if text and text.strip():
+                    logger.info(f"docx2txt解析成功: {path.name}, 文本长度: {len(text)}字符")
+
+                    return ParsedContent(
+                        text=text.strip(),
+                        title=path.stem,
+                        language="zh" if self._is_chinese_text(text) else "en",
+                        confidence=0.7,
+                        metadata={
+                            "format": "doc",
+                            "file_extension": ".doc",
+                            "file_size": path.stat().st_size,
+                            "parser": "docx2txt"
+                        }
+                    )
+                else:
+                    raise Exception("docx2txt解析结果为空")
+
+            except ImportError:
+                logger.warning("docx2txt库不可用，尝试其他解析方法")
+            except Exception as e:
+                logger.warning(f"docx2txt解析失败: {e}")
+
+            # 方法3: 尝试使用LibreOffice转换（如果系统安装了LibreOffice）
+            try:
+                import tempfile
+
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_file = os.path.join(temp_dir, f"{path.stem}.txt")
+
+                    # 尝试使用LibreOffice命令行工具转换
+                    libreoffice_cmd = [
+                        'soffice', '--headless', '--convert-to', 'txt',
+                        '--outdir', temp_dir, str(path)
+                    ]
+
+                    result = subprocess.run(libreoffice_cmd, capture_output=True,
+                                          text=True, timeout=60)
+
+                    if result.returncode == 0 and os.path.exists(temp_file):
+                        with open(temp_file, 'r', encoding='utf-8', errors='ignore') as f:
+                            text = f.read()
+
+                        if text.strip():
+                            logger.info(f"LibreOffice解析成功: {path.name}, 文本长度: {len(text)}字符")
+
+                            return ParsedContent(
+                                text=text.strip(),
+                                title=path.stem,
+                                language="zh" if self._is_chinese_text(text) else "en",
+                                confidence=0.9,
+                                metadata={
+                                    "format": "doc",
+                                    "file_extension": ".doc",
+                                    "file_size": path.stat().st_size,
+                                    "parser": "libreoffice"
+                                }
+                            )
+
+            except Exception as e:
+                logger.warning(f"LibreOffice解析失败: {e}")
+
+            # 方法4: 在Linux/macOS上尝试antiword（保留原有逻辑）
+            if os.name != 'nt':  # 非Windows系统
+                try:
+                    antiword_cmd = ['antiword', str(path)]
+                    result = subprocess.run(antiword_cmd, capture_output=True, text=True, timeout=30)
+
+                    if result.returncode == 0:
+                        text = result.stdout.strip()
+                        logger.info(f"antiword解析成功: {path.name}, 文本长度: {len(text)}字符")
+
+                        return ParsedContent(
+                            text=text,
+                            title=path.stem,
+                            language="zh" if self._is_chinese_text(text) else "en",
+                            confidence=0.8,
+                            metadata={
+                                "format": "doc",
+                                "file_extension": ".doc",
+                                "file_size": path.stat().st_size,
+                                "parser": "antiword"
+                            }
+                        )
+
+                except Exception as e:
+                    logger.warning(f"antiword解析失败: {e}")
+
+            # 所有方法都失败，返回友好的错误信息
+            logger.warning(f"所有.doc解析方法都失败: {path.name}")
+            return ParsedContent(
+                text=f"[经典Word文档(.doc)] - 无法解析内容，建议转换为.docx格式或安装LibreOffice",
+                title=path.stem,
+                language="metadata",
+                confidence=0.2,
+                metadata={
+                    "format": "doc",
+                    "file_extension": ".doc",
+                    "file_size": path.stat().st_size,
+                    "parser": "fallback",
+                    "note": "建议将.doc文件转换为.docx格式以获得更好的支持",
+                    "available_options": [
+                        "安装LibreOffice: https://www.libreoffice.org/download/download-libreoffice/",
+                        "转换为.docx格式后重新上传",
+                        "安装doc2text库: pip install doc2text"
+                    ]
+                }
+            )
 
         except Exception as e:
             logger.error(f"经典Word文档解析失败: {e}")
