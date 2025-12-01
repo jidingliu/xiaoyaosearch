@@ -425,7 +425,10 @@ class ContentParser:
                 # 提取幻灯片标题和内容
                 for shape in slide.shapes:
                     if hasattr(shape, "text") and shape.text.strip():
-                        slide_content.append(shape.text.strip())
+                        # 清理PPTX文本中的乱码字符（垂直制表符等）
+                        cleaned_text = self._clean_pptx_text(shape.text)
+                        if cleaned_text.strip():
+                            slide_content.append(cleaned_text.strip())
 
                 if slide_content:
                     slide_texts.append(f"[幻灯片 {slide_num + 1}]\n" + "\n".join(slide_content))
@@ -762,6 +765,33 @@ class ContentParser:
         final_text = re.sub(r'[^\u4e00-\u9fff\w]{10,}$', '', final_text)
 
         return final_text
+
+    def _clean_pptx_text(self, text: str) -> str:
+        """清理PPTX文本中的乱码和格式问题"""
+        if not text:
+            return ""
+
+        import re
+
+        # 移除垂直制表符和其他常见控制字符
+        text = text.replace('\x0B', '')  # 垂直制表符
+        text = text.replace('\x0C', '')  # 换页符
+        text = text.replace('\x08', '')  # 退格符
+        text = text.replace('\x07', '')  # 响铃符
+        text = text.replace('\x1B', '')  # ESC转义字符
+
+        # 移除连续的特殊控制字符组合
+        text = re.sub(r'[\x00-\x08\x0B-\x1F\x7F]', '', text)
+
+        # 替换常见的PPTX乱码模式
+        # 去除连续重复的特殊字符
+        text = re.sub(r'[^\w\s\u4e00-\u9fff.,;:!?()[\]{}"\'\-]{4,}', '', text)
+
+        # 清理多余的空白字符
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+
+        return text
 
     def _detect_language(self, text: str) -> str:
         """简单的语言检测"""
@@ -1481,7 +1511,10 @@ class ContentParser:
                 for slide in presentation.slides:
                     for shape in slide.shapes:
                         if hasattr(shape, "text") and shape.text:
-                            text_content.append(shape.text.strip())
+                            # 清理PPT文本中的乱码字符（垂直制表符等）
+                            cleaned_text = self._clean_pptx_text(shape.text)
+                            if cleaned_text.strip():
+                                text_content.append(cleaned_text.strip())
 
                 text = '\n'.join(text_content)
                 logger.info(f"经典PowerPoint解析成功: {path.name}, 文本长度: {len(text)}字符")

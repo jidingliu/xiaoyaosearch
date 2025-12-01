@@ -86,6 +86,9 @@ class FileIndexService:
             'indexing_progress': 0.0
         }
 
+        # 内存中缓存已索引文件信息（用于变更检测）
+        self._indexed_files_cache: Dict[str, FileInfo] = {}
+
     def _should_be_chunked(self, content_length: int) -> bool:
         """判断文件是否应该被分块处理
 
@@ -102,9 +105,6 @@ class FileIndexService:
 
         # 如果内容长度大于分块大小，则进行分块
         return content_length > chunk_size
-
-        # 内存中缓存已索引文件信息（用于变更检测）
-        self._indexed_files_cache: Dict[str, FileInfo] = {}
 
     async def build_full_index(
         self,
