@@ -86,6 +86,23 @@ class FileIndexService:
             'indexing_progress': 0.0
         }
 
+    def _should_be_chunked(self, content_length: int) -> bool:
+        """判断文件是否应该被分块处理
+
+        Args:
+            content_length: 文件内容的字符长度
+
+        Returns:
+            bool: 是否应该分块
+        """
+        # 获取分块配置
+        from app.core.config import get_settings
+        settings = get_settings()
+        chunk_size = settings.chunk.default_chunk_size
+
+        # 如果内容长度大于分块大小，则进行分块
+        return content_length > chunk_size
+
         # 内存中缓存已索引文件信息（用于变更检测）
         self._indexed_files_cache: Dict[str, FileInfo] = {}
 
@@ -432,7 +449,7 @@ class FileIndexService:
                             index_quality_score=1.0,
                             needs_reindex=False,
                             # v2.0分块字段（初始值，将在分块处理后更新）
-                            is_chunked=False,
+                            is_chunked=self._should_be_chunked(len(document.get('content', ''))),
                             total_chunks=1,
                             chunk_strategy='500+50',
                             avg_chunk_size=500

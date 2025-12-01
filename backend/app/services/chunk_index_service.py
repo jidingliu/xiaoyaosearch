@@ -219,20 +219,17 @@ class ChunkIndexService:
         Returns:
             bool: 是否需要分块
         """
-        # 1. 内容长度检查
-        if not content or len(content) <= 600:  # 略大于分块大小
+        # 获取分块配置
+        from app.core.config import get_settings
+        settings = get_settings()
+        chunk_size = settings.chunk.default_chunk_size
+
+        # 只要内容长度大于分块阈值，就进行分块（不限制文件类型）
+        if not content or len(content) <= chunk_size:
             return False
 
-        # 2. 文件类型检查
-        chunkable_types = ['document', 'text', 'pdf']
-        if file_type not in chunkable_types:
-            return False
-
-        # 3. 内容结构检查（有段落分隔符的内容更适合分块）
-        paragraph_indicators = ['\n\n', '。', '！', '？', '. ', '! ', '? ']
-        has_paragraphs = any(indicator in content for indicator in paragraph_indicators)
-
-        return has_paragraphs
+        # 所有达到分块阈值的文件都进行分块处理
+        return True
 
     async def _process_chunked_documents(self, documents: List[Dict[str, Any]]) -> bool:
         """处理需要分块的文档
