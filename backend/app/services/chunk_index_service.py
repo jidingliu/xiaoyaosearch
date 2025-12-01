@@ -165,8 +165,8 @@ class ChunkIndexService:
                     logger.error("分块文档处理失败")
                     return False
 
-            # 3. 处理传统文档（如果分块索引不存在，传统文档也添加到分块索引中）
-            if traditional_docs and not self._chunk_indexes_exist():
+            # 3. 处理传统文档（确保所有文档都在file_chunks表中有记录）
+            if traditional_docs:
                 success = await self._process_traditional_documents(traditional_docs)
                 if not success:
                     logger.error("传统文档处理失败")
@@ -778,8 +778,33 @@ class ChunkIndexService:
                 }
                 single_chunks.append(chunk_data)
 
-            # 构建索引（使用相同的流程）
-            return await self._process_chunked_documents(single_chunks)
+            # 生成索引ID
+            faiss_index_ids = []
+            whoosh_doc_ids = []
+
+            if single_chunks:
+                logger.info("为传统文档生成索引ID...")
+                for i in enumerate(single_chunks):
+                    # Faiss索引ID
+                    if FAISS_AVAILABLE and self.use_ai_models and AI_MODEL_SERVICE_AVAILABLE:
+                        faiss_id = generate_snowflake_id(machine_id=1 + i[0] % 1024)
+                        faiss_index_ids.append(faiss_id)
+
+                    # Whoosh文档ID
+                    if WHOOSH_AVAILABLE:
+                        whoosh_id = str(generate_snowflake_id(machine_id=1 + (i[0] + 1000) % 1024))
+                        whoosh_doc_ids.append(whoosh_id)
+
+            # 直接保存到数据库（不重复构建索引，因为传统文档已经在主索引中）
+            db_success = await self._save_chunks_to_database(single_chunks, faiss_index_ids, whoosh_doc_ids)
+            if not db_success:
+                logger.warning("传统文档数据保存失败")
+                return False
+
+            # 更新files表的分块状态（标记为单分块）
+            await self._update_files_chunk_status(single_chunks, is_traditional=True)
+
+            return True
 
         except Exception as e:
             logger.error(f"处理传统文档失败: {e}")
@@ -799,7 +824,6 @@ class ChunkIndexService:
         try:
             from app.core.database import SessionLocal
             from app.models.file_chunk import FileChunkModel
-            from app.models.file import FileModel
 
             db = SessionLocal()
             try:
@@ -850,7 +874,40 @@ class ChunkIndexService:
                         db.commit()
                         logger.debug(f"已保存 {i + 1}/{len(chunks)} 个分块")
 
-                # 更新files表的分块状态
+                
+                # 最终提交
+                db.commit()
+                logger.info(f"成功保存 {len(chunks)} 个分块到数据库")
+                return True
+
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"保存分块到数据库失败: {e}")
+            return False
+
+    async def _update_files_chunk_status(self, chunks: List[Dict[str, Any]], is_traditional: bool = False) -> None:
+        """更新files表的分块状态
+
+        Args:
+            chunks: 分块列表
+            is_traditional: 是否为传统文档（单分块）
+        """
+        try:
+            from app.core.database import SessionLocal
+            from app.models.file import FileModel
+
+            db = SessionLocal()
+            try:
+                # 统计每个文件的分块数量
+                file_chunk_stats = {}
+                for chunk in chunks:
+                    file_id = chunk.get('file_id')
+                    if file_id not in file_chunk_stats:
+                        file_chunk_stats[file_id] = 0
+                    file_chunk_stats[file_id] += 1
+
                 logger.info(f"更新 {len(file_chunk_stats)} 个文件的分块状态")
                 for file_id, total_chunks in file_chunk_stats.items():
                     try:
@@ -863,13 +920,13 @@ class ChunkIndexService:
                             # 更新分块相关字段
                             file_record.is_chunked = True
                             file_record.total_chunks = total_chunks
-                            file_record.chunk_strategy = self.chunk_strategy
+                            file_record.chunk_strategy = self.chunk_strategy if not is_traditional else 'single_chunk'
                             file_record.avg_chunk_size = sum(
                                 int(c.get('content_length', 0)) for c in chunks
                                 if c.get('file_id') == file_id
                             ) // total_chunks if total_chunks > 0 else 500
 
-                            logger.debug(f"更新文件 {file_id} 分块状态: {total_chunks} 个分块")
+                            logger.debug(f"更新文件 {file_id} 分块状态: {total_chunks} 个分块 ({'传统' if is_traditional else '分块'})")
                         else:
                             logger.warning(f"未找到文件记录 ID: {file_id}")
 
@@ -878,15 +935,12 @@ class ChunkIndexService:
 
                 # 最终提交
                 db.commit()
-                logger.info(f"成功保存 {len(chunks)} 个分块到数据库，并更新文件分块状态")
-                return True
 
             finally:
                 db.close()
 
         except Exception as e:
-            logger.error(f"保存分块到数据库失败: {e}")
-            return False
+            logger.error(f"更新文件分块状态失败: {e}")
 
     def _chunk_indexes_exist(self) -> bool:
         """检查分块索引是否存在"""
