@@ -170,31 +170,40 @@ class ChunkService:
                     # 如果找不到合适的分割点，强制在分块大小处分割
                     logger.debug(f"在位置 {current_pos} 未找到合适的分割点，强制分割")
 
-            # 提取分块内容
-            chunk_content = content[current_pos:chunk_end].strip()
+            # 计算实际分块起始位置（考虑重叠）
+            actual_start_pos = current_pos
+            actual_content_start = current_pos
+
+            # 添加重叠内容（不是第一个分块）
+            if chunk_index > 0 and overlap > 0:
+                overlap_content = self._get_overlap_content(
+                    content, chunks, current_pos, overlap
+                )
+                if overlap_content:
+                    # 重叠内容的起始位置
+                    overlap_start_pos = max(0, current_pos - len(overlap_content))
+                    actual_start_pos = overlap_start_pos
+                    # 提取包含重叠的完整分块内容
+                    chunk_content = content[actual_start_pos:chunk_end].strip()
+                else:
+                    # 没有重叠内容，使用原始位置
+                    chunk_content = content[current_pos:chunk_end].strip()
+            else:
+                # 第一个分块，没有重叠
+                chunk_content = content[current_pos:chunk_end].strip()
 
             if chunk_content:
-                # 添加重叠内容（不是第一个分块）
-                if chunk_index > 0 and overlap > 0:
-                    overlap_content = self._get_overlap_content(
-                        content, chunks, current_pos, overlap
-                    )
-                    if overlap_content:
-                        chunk_content = overlap_content + "\n\n" + chunk_content
-                        # 调整开始位置
-                        current_pos = max(0, current_pos - len(overlap_content))
-
                 chunk_info = ChunkInfo(
                     content=chunk_content,
-                    start_position=current_pos,
+                    start_position=actual_start_pos,
                     end_position=chunk_end,
                     chunk_index=chunk_index
                 )
 
                 chunks.append(chunk_info)
-                logger.debug(f"创建分块 {chunk_index}: 位置 {current_pos}-{chunk_end}, 长度 {len(chunk_content)}")
+                logger.debug(f"创建分块 {chunk_index}: 位置 {actual_start_pos}-{chunk_end}, 长度 {len(chunk_content)}, 重叠: {len(overlap_content) if chunk_index > 0 and overlap > 0 else 0}")
 
-            # 移动到下一个分块（考虑重叠）
+            # 移动到下一个分块（不考虑重叠，因为重叠已经在内容中处理）
             current_pos = chunk_end
             chunk_index += 1
 
