@@ -1216,6 +1216,11 @@ class ContentParser:
             try:
                 from app.services.ai_model_manager import ai_model_service
 
+                # 确保AI模型服务已初始化
+                if not hasattr(ai_model_service, '_initialized') or not ai_model_service._initialized:
+                    await ai_model_service.initialize()
+                    ai_model_service._initialized = True
+
                 # 准备图像理解查询文本
                 query_texts = [
                     "描述这张图片的内容",
@@ -1229,11 +1234,27 @@ class ContentParser:
                     query_texts
                 )
 
-                if understanding_result and understanding_result.get("success", False):
+                # 判断图像理解是否成功（根据返回结果的结构，有best_match即为成功）
+                success = (understanding_result and
+                          isinstance(understanding_result, dict) and
+                          "best_match" in understanding_result and
+                          understanding_result["best_match"] is not None)
+
+                if success:
                     # 提取最佳匹配的描述
                     best_match = understanding_result.get("best_match", {})
                     image_description = best_match.get("text", "").strip()
-                    confidence = best_match.get("confidence", 0.0)
+                    similarity = best_match.get("similarity", 0.0)
+
+                    # 将相似度转换为0-1之间的置信度
+                    # CLIP返回的相似度可能在不同范围，需要归一化
+                    if similarity > 1.0:
+                        # 如果相似度大于1，假设是logits值，使用sigmoid归一化
+                        import math
+                        confidence = 1 / (1 + math.exp(-similarity / 10))  # 缩放因子为10
+                    else:
+                        # 如果相似度在0-1之间，直接使用
+                        confidence = max(0.0, min(1.0, float(similarity)))
 
                     # 如果没有获取到描述，使用默认文本
                     if not image_description:
@@ -1250,7 +1271,8 @@ class ContentParser:
                             "height": height,
                             "mode": img.mode,
                             "image_understood": True,
-                            "clip_confidence": confidence,
+                            "clip_similarity": float(similarity),
+                            "clip_confidence": float(confidence),
                             "processed_at": datetime.now().isoformat()
                         }
 
@@ -1264,7 +1286,16 @@ class ContentParser:
                         metadata=metadata
                     )
                 else:
-                    error_msg = understanding_result.get("error", "图像理解失败")
+                    # 根据不同情况确定错误消息
+                    if not understanding_result:
+                        error_msg = "AI模型服务返回空结果"
+                    elif not isinstance(understanding_result, dict):
+                        error_msg = f"AI模型服务返回格式错误: {type(understanding_result)}"
+                    elif "error" in understanding_result:
+                        error_msg = understanding_result.get("error", "图像理解失败")
+                    else:
+                        error_msg = "图像理解服务返回异常结果"
+
                     logger.warning(f"图像理解失败: {path.name}, 错误: {error_msg}")
 
                     # 降级为元数据提取
