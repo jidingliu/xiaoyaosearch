@@ -106,6 +106,72 @@ class FileIndexService:
         # 如果内容长度大于分块大小，则进行分块
         return content_length > chunk_size
 
+    async def load_indexed_files_cache(self):
+        """从数据库加载已索引文件到缓存（启动时调用）"""
+        try:
+            from app.core.database import SessionLocal
+            from app.models.file import FileModel
+
+            logger.info("开始从数据库加载索引缓存...")
+            start_time = datetime.now()
+
+            db = SessionLocal()
+            try:
+                # 查询所有已索引的文件
+                indexed_files = db.query(FileModel).filter(
+                    FileModel.is_indexed == True,
+                    FileModel.index_status == 'completed'
+                ).all()
+
+                loaded_count = 0
+                for file_record in indexed_files:
+                    try:
+                        # 转换数据库记录为FileInfo对象
+                        file_info = FileInfo(
+                            path=file_record.file_path,
+                            name=file_record.file_name,
+                            extension=file_record.file_extension,
+                            size=file_record.file_size,
+                            created_time=file_record.created_at,
+                            modified_time=file_record.modified_at,
+                            mime_type=file_record.mime_type or "application/octet-stream",
+                            content_hash=file_record.content_hash or ""
+                        )
+
+                        # 检查文件是否仍然存在且未被修改
+                        if os.path.exists(file_record.file_path):
+                            current_stat = os.stat(file_record.file_path)
+                            current_modified = datetime.fromtimestamp(current_stat.st_mtime)
+
+                            # 只有当文件未被修改时才加入缓存
+                            if current_modified <= file_record.modified_at:
+                                self._indexed_files_cache[file_info.path] = file_info
+                                loaded_count += 1
+                                logger.debug(f"✅ 加载到缓存: {file_record.file_name}")
+                            else:
+                                logger.debug(f"❌ 文件已修改，跳过: {file_record.file_name}")
+                        else:
+                            logger.debug(f"❌ 文件不存在，跳过: {file_record.file_path}")
+
+                    except Exception as e:
+                        logger.warning(f"加载文件到缓存失败 {file_record.file_path}: {e}")
+                        continue
+
+                duration = datetime.now() - start_time
+                logger.info(f"索引缓存加载完成: {loaded_count}/{len(indexed_files)} 个文件，耗时 {duration.total_seconds():.2f} 秒")
+
+                # 如果缓存的文件数量远少于数据库记录，可能需要重建索引
+                if loaded_count < len(indexed_files) * 0.8:  # 少于80%
+                    logger.warning(f"缓存完整性较低 ({loaded_count}/{len(indexed_files)})，建议检查索引状态")
+
+            except Exception as e:
+                logger.error(f"从数据库加载索引缓存失败: {e}")
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"加载索引缓存时发生异常: {e}")
+
     async def build_full_index(
         self,
         scan_paths: List[str],
@@ -358,7 +424,13 @@ class FileIndexService:
                 except Exception as e:
                     logger.error(f"处理变更文件失败 {file_info.path}: {e}")
 
-            # 4. 从索引中删除已删除的文件
+            # 4. 保存变更文件到数据库（确保获得正确的整数ID）
+            if new_documents:
+                logger.info(f"开始保存 {len(new_documents)} 个变更文件到数据库")
+                await self._save_files_to_database(all_changes, new_documents)
+                logger.info("变更文件保存到数据库完成")
+
+            # 5. 从索引中删除已删除的文件
             deleted_count = 0
             if all_deletions:
                 logger.info(f"开始删除 {len(all_deletions)} 个已删除文件的索引")
@@ -376,13 +448,13 @@ class FileIndexService:
 
                 logger.info(f"文件索引删除完成，总共删除了 {deleted_count} 个分块")
 
-            # 5. 添加新文档到索引
+            # 6. 添加新文档到索引
             if new_documents:
                 chunk_index_success = await chunk_index_service.build_chunk_indexes(new_documents)
                 if not chunk_index_success:
                     logger.warning("增量更新中构建分块索引失败，但继续处理")
 
-            # 6. 更新缓存
+            # 7. 更新缓存
             # 从缓存中移除已删除的文件
             for deleted_path in all_deletions:
                 self._indexed_files_cache.pop(deleted_path, None)
@@ -690,6 +762,11 @@ class FileIndexService:
             except Exception as e:
                 logger.warning(f"获取分块索引统计失败: {e}")
 
+        # 添加缓存状态信息
+        status.update({
+            'cached_files_count': len(self._indexed_files_cache)
+        })
+
         return status
 
     def search_files(
@@ -880,5 +957,6 @@ def get_file_index_service() -> FileIndexService:
                 'max_content_length': settings.index.max_content_length
             }
         )
+
         logger.info("文件索引服务实例已创建")
     return _file_index_service

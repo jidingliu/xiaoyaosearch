@@ -112,7 +112,7 @@ class ChunkIndexService:
         if not chunk_faiss_index_path:
             chunk_faiss_index_path = faiss_index_path.replace('.faiss', '_chunks.faiss')
         if not chunk_whoosh_index_path:
-            # 分块Whoosh索引使用同一个目录，但使用不同的schema和文件结构
+            # 分块Whoosh索引使用同一个目录，但使用不同的schema��文件结构
             chunk_whoosh_index_path = whoosh_index_path  # 使用相同的whoosh目录
 
         self.chunk_faiss_index_path = chunk_faiss_index_path
@@ -836,9 +836,11 @@ class ChunkIndexService:
 
                 # 保存分块记录
                 for i, chunk_data in enumerate(chunks):
+                    # 获取文件ID
+                    file_id = chunk_data['file_id']
                     # 检查是否已存在
                     existing_chunk = db.query(FileChunkModel).filter(
-                        FileChunkModel.file_id == int(chunk_data['file_id']),
+                        FileChunkModel.file_id == file_id,
                         FileChunkModel.chunk_index == chunk_data['chunk_index']
                     ).first()
 
@@ -851,7 +853,7 @@ class ChunkIndexService:
                     else:
                         # 创建新分块记录
                         chunk_record = FileChunkModel(
-                            file_id=int(chunk_data['file_id']),
+                            file_id=file_id,  # 使用转换后的整数ID
                             chunk_index=chunk_data['chunk_index'],
                             content=chunk_data['content'],
                             content_length=chunk_data['content_length'],

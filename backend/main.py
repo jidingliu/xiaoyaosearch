@@ -57,6 +57,17 @@ async def lifespan(app: FastAPI):
             except:
                 pass
 
+        # 初始化索引缓存
+        logger.info("初始化索引缓存...")
+        try:
+            from app.services.file_index_service import get_file_index_service
+            index_service = get_file_index_service()
+            await index_service.load_indexed_files_cache()
+            logger.info("索引缓存初始化完成")
+        except Exception as e:
+            logger.warning(f"索引缓存初始化失败: {str(e)}")
+            logger.info("继续运行，但首次增量更新可能较慢")
+
         logger.info("✅ 小遥搜索服务启动完成")
         logger.info(f"📖 API文档: http://127.0.0.1:8000/docs")
         logger.info(f"📋 ReDoc文档: http://127.0.0.1:8000/redoc")
