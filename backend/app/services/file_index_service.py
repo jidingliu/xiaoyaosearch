@@ -396,13 +396,28 @@ class FileIndexService:
             all_changes = []
             all_deletions = []
 
+            # 🔍 调试：检查缓存状态
+            logger.info(f"🔍 增量更新调试：当前缓存中有 {len(self._indexed_files_cache)} 个文件")
+            if len(self._indexed_files_cache) == 0:
+                logger.warning("⚠️ 缓存为空！这将导致全量重建！")
+                # 列出缓存中的几个文件路径用于调试
+                for i, (path, file_info) in enumerate(list(self._indexed_files_cache.items())[:3]):
+                    logger.debug(f"缓存文件 {i+1}: {path}")
+            else:
+                logger.info("✅ 缓存有数据，进行增量更新")
+
             for path in scan_paths:
+                logger.info(f"🔍 扫描路径变更: {path}")
                 changed_files, deleted_files, _ = self.scanner.scan_changes(
                     path,
                     self._indexed_files_cache,
                     recursive=True,
                     include_hidden=False
                 )
+                logger.info(f"🔍 扫描结果: 变更文件 {len(changed_files)} 个, 删除文件 {len(deleted_files)} 个")
+                if changed_files:
+                    for file_info in changed_files[:5]:  # 只显示前5个
+                        logger.debug(f"  变更: {file_info.path}")
                 all_changes.extend(changed_files)
                 all_deletions.extend(deleted_files)
 

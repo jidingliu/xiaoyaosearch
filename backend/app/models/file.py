@@ -24,7 +24,7 @@ class FileModel(Base):
     file_size = Column(BigInteger, nullable=False, comment="文件大小(字节)")
     created_at = Column(DateTime, nullable=False, comment="文件创建时间")
     modified_at = Column(DateTime, nullable=False, comment="文件修改时间")
-    indexed_at = Column(DateTime, nullable=False, default=func.now(), comment="索引时间")
+    indexed_at = Column(DateTime, nullable=False, comment="索引时间")
     content_hash = Column(String(64), nullable=False, comment="文件内容哈希(用于变更检测)")
     # 文件处理状态
     is_indexed = Column(Boolean, default=False, comment="是否已索引")

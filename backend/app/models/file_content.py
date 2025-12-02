@@ -38,7 +38,7 @@ class FileContentModel(Base):
 
     # 时间戳
     parsed_at = Column(DateTime, nullable=True, comment="解析时间")
-    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now(), comment="更新时间")
+    updated_at = Column(DateTime, nullable=False, comment="更新时间")
 
     # 注意：软外键模式下不定义SQLAlchemy relationship
     # 关联关系由应用层通过file_id字段手动维护
