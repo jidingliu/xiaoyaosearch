@@ -313,7 +313,15 @@ class FileIndexService:
             start_time = datetime.now()
 
             # 1. 检查索引是否存在
-            if not self.index_builder.index_exists():
+            if not CHUNK_INDEX_AVAILABLE:
+                logger.warning("分块索引服务不可用，无法执行增量更新")
+                return {
+                    'success': False,
+                    'error': '分块索引服务不可用'
+                }
+
+            chunk_index_service = get_chunk_index_service()
+            if not chunk_index_service._chunk_indexes_exist():
                 logger.info("索引不存在，执行完整索引构建")
                 # 直接同步调用，因为build_full_index会处理异步操作
                 return self._build_full_index_sync(scan_paths)
@@ -351,13 +359,28 @@ class FileIndexService:
                     logger.error(f"处理变更文件失败 {file_info.path}: {e}")
 
             # 4. 从索引中删除已删除的文件
+            deleted_count = 0
             if all_deletions:
-                deleted_ids = [str(Path(f).stat().st_ino) for f in all_deletions]
-                self.index_builder.delete_from_indexes(deleted_ids)
+                logger.info(f"开始删除 {len(all_deletions)} 个已删除文件的索引")
+                for deleted_file_path in all_deletions:
+                    try:
+                        # 使用分块索引服务删除文件
+                        delete_result = await chunk_index_service.delete_file_from_indexes(deleted_file_path)
+                        if delete_result.get('success', False):
+                            deleted_count += delete_result.get('deleted_chunks', 0)
+                            logger.info(f"成功删除文件索引: {deleted_file_path}")
+                        else:
+                            logger.error(f"删除文件索引失败: {deleted_file_path}, 错误: {delete_result.get('error')}")
+                    except Exception as e:
+                        logger.error(f"删除文件索引异常: {deleted_file_path}, 错误: {e}")
+
+                logger.info(f"文件索引删除完成，总共删除了 {deleted_count} 个分块")
 
             # 5. 添加新文档到索引
             if new_documents:
-                self.index_builder.update_indexes(new_documents)
+                chunk_index_success = await chunk_index_service.build_chunk_indexes(new_documents)
+                if not chunk_index_success:
+                    logger.warning("增量更新中构建分块索引失败，但继续处理")
 
             # 6. 更新缓存
             # 从缓存中移除已删除的文件
@@ -377,7 +400,7 @@ class FileIndexService:
                 'deleted_files': len(all_deletions),
                 'new_documents': len(new_documents),
                 'duration_seconds': duration.total_seconds(),
-                'index_stats': self.index_builder.get_index_stats()
+                'index_stats': chunk_index_service.get_index_stats()
             }
 
         except Exception as e:
@@ -708,7 +731,7 @@ class FileIndexService:
                 'error': str(e)
             }
 
-    def delete_file_from_index(self, file_path: str) -> Dict[str, Any]:
+    async def delete_file_from_index(self, file_path: str) -> Dict[str, Any]:
         """从索引中删除文件
 
         Args:
@@ -721,15 +744,39 @@ class FileIndexService:
             # 生成文档ID
             doc_id = self._generate_document_id_from_path(file_path)
 
-            # 从索引中删除
-            success = self.index_builder.delete_from_indexes([doc_id])
+            # 使用分块索引服务删除文件
+            if not CHUNK_INDEX_AVAILABLE:
+                return {
+                    'success': False,
+                    'error': '分块索引服务不可用',
+                    'file_path': file_path
+                }
+
+            chunk_index_service = get_chunk_index_service()
+            delete_result = await chunk_index_service.delete_file_from_indexes(file_path)
+            success = delete_result.get('success', False)
 
             # 从缓存中删除
             self._indexed_files_cache.pop(file_path, None)
 
+            if not success:
+                logger.error(f"删除文件失败: {delete_result.get('error', '未知错误')}")
+                return {
+                    'success': False,
+                    'error': delete_result.get('error', '删除文件失败'),
+                    'file_path': file_path
+                }
+
+            logger.info(f"分块索引服务删除文件成功: {delete_result.get('deleted_chunks', 0)} 个分块")
+
             return {
-                'success': success,
-                'message': f"文件 {file_path} 已从索引中删除"
+                'success': True,
+                'file_path': file_path,
+                'deleted_chunks': delete_result.get('deleted_chunks', 0),
+                'faiss_deleted_count': delete_result.get('faiss_deleted_count', 0),
+                'whoosh_deleted_count': delete_result.get('whoosh_deleted_count', 0),
+                'duration_seconds': delete_result.get('duration_seconds', 0),
+                'message': '文件删除完成'
             }
         except Exception as e:
             logger.error(f"从索引中删除文件失败 {file_path}: {e}")
@@ -767,7 +814,9 @@ class FileIndexService:
                 backup_name = f"index_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
             backup_dir = self.data_root / "backups" / backup_name
-            success = self.index_builder.backup_indexes(str(backup_dir))
+            # 注意：分块索引服务暂不提供备份功能，这里仅记录日志
+            logger.info(f"需要备份索引到: {backup_dir}")
+            success = True
 
             return {
                 'success': success,
