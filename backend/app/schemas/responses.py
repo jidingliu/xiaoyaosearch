@@ -24,8 +24,8 @@ class SearchResult(BaseModel):
     relevance_score: float = Field(..., ge=0.0, le=1.0, description="相关性分数")
     preview_text: str = Field(..., max_length=200, description="预览文本")
     highlight: str = Field(..., description="高亮片段")
-    created_at: datetime = Field(..., description="文件创建时间")
-    modified_at: datetime = Field(..., description="文件修改时间")
+    created_at: Optional[datetime] = Field(None, description="文件创建时间")
+    modified_at: Optional[datetime] = Field(None, description="文件修改时间")
     file_size: int = Field(..., description="文件大小(字节)")
     match_type: str = Field(..., description="匹配类型 semantic/fulltext/hybrid")
 

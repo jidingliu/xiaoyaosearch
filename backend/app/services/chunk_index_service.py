@@ -217,11 +217,17 @@ class ChunkIndexService:
                 whoosh_success = True
 
             # 5. 保存分块数据到数据库
-            db_success = await self._save_chunks_to_database(all_chunks, faiss_index_ids, whoosh_doc_ids)
-            if not db_success:
+            saved_chunk_ids = await self._save_chunks_to_database(all_chunks, faiss_index_ids, whoosh_doc_ids)
+            if not saved_chunk_ids:
                 logger.warning("分块数据保存失败，但索引构建已完成")
+                db_success = False
+            else:
+                db_success = True
+                # 6. 更新索引元数据中的chunk_ids
+                if self.use_ai_models and faiss_success:
+                    await self._update_faiss_metadata_chunk_ids(saved_chunk_ids)
 
-            return faiss_success and whoosh_success
+            return faiss_success and whoosh_success and db_success
 
         except Exception as e:
             logger.error(f"处理分块文档失败: {e}")
@@ -315,7 +321,7 @@ class ChunkIndexService:
 
             # 5. 保存增强元数据
             metadata = {
-                'chunk_ids': [f"chunk_{chunk.get('chunk_index', i)}_file_{chunk.get('file_id', '')}" for i, chunk in enumerate(chunks)],
+                'chunk_ids': [str(chunk.get('id', f"chunk_{chunk.get('chunk_index', i)}_file_{chunk.get('file_id', '')}")) for i, chunk in enumerate(chunks)],
                 'file_ids': [chunk.get('file_id', '') for chunk in chunks],
                 'chunk_indices': [chunk.get('chunk_index', i) for i, chunk in enumerate(chunks)],
                 'start_positions': [chunk.get('start_position', 0) for chunk in chunks],
@@ -736,8 +742,23 @@ class ChunkIndexService:
                 
                 # 最终提交
                 db.commit()
-                logger.info(f"成功保存 {len(chunks)} 个分块到数据库")
-                return True
+
+                # 获取保存后的数据库ID
+                saved_chunk_ids = []
+                for chunk_data in chunks:
+                    file_id = chunk_data['file_id']
+                    chunk_index = chunk_data['chunk_index']
+                    saved_chunk = db.query(FileChunkModel).filter(
+                        FileChunkModel.file_id == file_id,
+                        FileChunkModel.chunk_index == chunk_index
+                    ).first()
+                    if saved_chunk:
+                        saved_chunk_ids.append(saved_chunk.id)
+                    else:
+                        logger.warning(f"找不到保存的分块: file_id={file_id}, chunk_index={chunk_index}")
+
+                logger.info(f"成功保存 {len(chunks)} 个分块到数据库，获取ID数量: {len(saved_chunk_ids)}")
+                return saved_chunk_ids
 
             finally:
                 db.close()
@@ -1484,6 +1505,33 @@ class ChunkIndexService:
             logger.error(f"从Whoosh索引删除失败: {e}")
             return 0
 
+    async def _update_faiss_metadata_chunk_ids(self, saved_chunk_ids: List[int]) -> None:
+        """更新Faiss索引元数据中的chunk_ids为数据库真实ID
+
+        Args:
+            saved_chunk_ids: 数据库中保存的分块ID列表
+        """
+        try:
+            metadata_path = self.chunk_faiss_index_path.replace('.faiss', '_metadata.pkl')
+            if not os.path.exists(metadata_path):
+                logger.warning("Faiss元数据文件不存在，无法更新chunk_ids")
+                return
+
+            with open(metadata_path, 'rb') as f:
+                metadata = pickle.load(f)
+
+            # 更新chunk_ids为数据库真实ID
+            metadata['chunk_ids'] = [str(chunk_id) for chunk_id in saved_chunk_ids]
+
+            # 保存更新后的元数据
+            with open(metadata_path, 'wb') as f:
+                pickle.dump(metadata, f)
+
+            logger.info(f"成功更新Faiss元数据中的chunk_ids，数量: {len(saved_chunk_ids)}")
+
+        except Exception as e:
+            logger.error(f"更新Faiss元数据chunk_ids失败: {e}")
+
 
 # 创建全局分块索引服务实例
 _chunk_index_service: Optional[ChunkIndexService] = None
@@ -1494,9 +1542,13 @@ def get_chunk_index_service() -> ChunkIndexService:
     global _chunk_index_service
     if _chunk_index_service is None:
         # 使用默认路径创建服务实例
-        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss/document_index_chunks.faiss')
+        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss') + '/document_index_chunks.faiss'
         chunk_whoosh_path = os.getenv('WHOOSH_INDEX_PATH', '../data/indexes/whoosh')
 
+        logger.info(f"初始化分块搜索服务:")
+        logger.info(f"  - Faiss索引路径: {chunk_faiss_path}")
+        logger.info(f"  - Whoosh索引路径: {chunk_whoosh_path}")
+        
         _chunk_index_service = ChunkIndexService(
             chunk_faiss_index_path=chunk_faiss_path,
             chunk_whoosh_index_path=chunk_whoosh_path,

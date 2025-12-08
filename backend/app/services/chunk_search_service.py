@@ -227,9 +227,68 @@ class ChunkSearchService:
             logger.error(f"分块搜索失败: {e}")
             return []
 
+    def _map_file_type_to_enum(self, file_type: str) -> str:
+        """将文件类型映射到枚举值
+
+        Args:
+            file_type: 原始文件类型（如 'pdf', 'txt', 'docx'）
+
+        Returns:
+            str: 映射后的枚举值
+        """
+        if not file_type:
+            return 'other'
+
+        file_type_lower = file_type.lower()
+
+        # 文档类型
+        document_types = {
+            'pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+            'rtf', 'odt', 'ods', 'odp', 'md', 'markdown', 'tex', 'latex',
+            'csv', 'json', 'xml', 'html', 'htm', 'epub', 'mobi', 'azw'
+        }
+
+        # 视频类型
+        video_types = {
+            'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp',
+            'mpg', 'mpeg', 'ogv', 'ts', 'mts', 'm2ts', 'vob', 'f4v'
+        }
+
+        # 音频类型
+        audio_types = {
+            'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus',
+            'aiff', 'au', 'ra', 'amr', 'ac3', 'dts', 'mka'
+        }
+
+        # 图片类型
+        image_types = {
+            'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp',
+            'svg', 'ico', 'psd', 'ai', 'eps', 'raw', 'cr2', 'nef', 'arw'
+        }
+
+        if file_type_lower in document_types:
+            return 'document'
+        elif file_type_lower in video_types:
+            return 'video'
+        elif file_type_lower in audio_types:
+            return 'audio'
+        elif file_type_lower in image_types:
+            return 'image'
+        else:
+            return 'other'
+
     async def _chunk_semantic_search(self, query: str, limit: int, threshold: float) -> List[Dict[str, Any]]:
         """分块级语义搜索"""
         try:
+            # 检查索引是否可用
+            if self.chunk_faiss_index is None:
+                logger.warning("分块Faiss索引未加载，跳过语义搜索")
+                return []
+
+            if self.chunk_faiss_index.ntotal == 0:
+                logger.warning("分块Faiss索引为空，跳过语义搜索")
+                return []
+
             # 生成查询向量
             query_embedding = await ai_model_service.text_embedding(
                 query,
@@ -238,21 +297,57 @@ class ChunkSearchService:
 
             # 执行向量搜索
             import numpy as np
-            query_vector = np.array([query_embedding], dtype=np.float32)
+
+            # 检查查询向量的维度和形状
+            query_embedding = np.array(query_embedding, dtype=np.float32)
+            logger.debug(f"查询嵌入向量形状: {query_embedding.shape}")
+
+            # 确保查询向量是二维的 (1, d)
+            if len(query_embedding.shape) == 1:
+                query_vector = query_embedding.reshape(1, -1)
+            else:
+                query_vector = query_embedding
+
+            logger.debug(f"查询向量最终形状: {query_vector.shape}")
+            logger.debug(f"Faiss索引维度: {self.chunk_faiss_index.d}")
 
             k = min(limit * 3, self.chunk_faiss_index.ntotal)  # 搜索3倍的结果用于筛选
+
+            # 检查向量维度是否匹配
+            if query_vector.shape[1] != self.chunk_faiss_index.d:
+                logger.error(f"向量维度不匹配: 查询向量={query_vector.shape[1]}, 索引={self.chunk_faiss_index.d}")
+                return []
+
+            # 安全的搜索操作 - 直接解包返回值
             distances, indices = self.chunk_faiss_index.search(query_vector, k)
+
+            # 检查返回值的形状
+            if distances is None or indices is None:
+                logger.error("Faiss搜索返回空值")
+                return []
+
+            # 确保返回的数组形状正确
+            if hasattr(distances, 'shape') and hasattr(indices, 'shape'):
+                logger.debug(f"搜索返回形状 - distances: {distances.shape}, indices: {indices.shape}")
+            else:
+                logger.error("Faiss搜索返回的数组没有shape属性")
+                return []
 
             # 处理结果
             results = []
             chunk_ids = self.chunk_faiss_metadata.get('chunk_ids', [])
+
+            # 确保indices是二维数组
+            if len(indices.shape) == 1:
+                indices = indices.reshape(1, -1)
+                distances = distances.reshape(1, -1)
 
             for i, idx in enumerate(indices[0]):
                 if idx >= 0 and idx < len(chunk_ids):
                     similarity = float(distances[0][i])
                     if similarity >= threshold:
                         chunk_id = chunk_ids[idx]
-                        chunk_info = self._get_chunk_info(chunk_id)
+                        chunk_info = self._get_chunk_info(chunk_id, query)
                         if chunk_info:
                             chunk_info['relevance_score'] = min(similarity, 1.0)
                             chunk_info['match_type'] = 'semantic'
@@ -262,6 +357,8 @@ class ChunkSearchService:
 
         except Exception as e:
             logger.error(f"分块语义搜索失败: {e}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
             return []
 
     async def _chunk_fulltext_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
@@ -375,12 +472,15 @@ class ChunkSearchService:
     
     def _convert_chunk_to_standard_format(self, chunk_result: Dict[str, Any]) -> Dict[str, Any]:
         """将分块结果转换为标准格式"""
+        # 映射文件类型到枚举值
+        file_type = self._map_file_type_to_enum(chunk_result.get('file_type', ''))
+
         return {
             'id': chunk_result.get('file_id', ''),
             'title': chunk_result.get('file_name', ''),
             'file_path': chunk_result.get('file_path', ''),
             'file_name': chunk_result.get('file_name', ''),
-            'file_type': chunk_result.get('file_type', ''),
+            'file_type': file_type,
             'content': chunk_result.get('content', ''),
             'preview_text': chunk_result.get('content', '')[:200],
             'relevance_score': chunk_result.get('relevance_score', 0),
@@ -408,7 +508,7 @@ class ChunkSearchService:
 
         return unique_results
 
-    def _get_chunk_info(self, chunk_id: str) -> Optional[Dict[str, Any]]:
+    def _get_chunk_info(self, chunk_id: str, query: str = '') -> Optional[Dict[str, Any]]:
         """根据分块ID获取分块信息"""
         try:
             from app.core.database import SessionLocal
@@ -427,7 +527,12 @@ class ChunkSearchService:
                 if not file:
                     return None
 
-                return {
+                # 生成预览文本和高亮
+            content = chunk.content or ''
+            preview_text = content[:200] + '...' if len(content) > 200 else content
+            highlight = self._generate_highlight(content, query) if query else content[:100] + '...' if len(content) > 100 else content
+
+            return {
                     'id': str(file.id),
                     'chunk_id': str(chunk.id),
                     'file_id': str(chunk.file_id),
@@ -435,8 +540,11 @@ class ChunkSearchService:
                     'file_path': file.file_path,
                     'file_type': file.file_type,
                     'file_size': file.file_size,
-                    'modified_time': file.modified_at.isoformat() if file.modified_at else '',
-                    'content': chunk.content,
+                    'created_at': file.created_at.isoformat() if file.created_at else None,
+                    'modified_time': file.modified_at.isoformat() if file.modified_at else None,
+                    'content': content,
+                    'preview_text': preview_text,
+                    'highlight': highlight,
                     'chunk_index': chunk.chunk_index,
                     'start_position': chunk.start_position,
                     'end_position': chunk.end_position,
@@ -450,7 +558,44 @@ class ChunkSearchService:
             logger.error(f"获取分块信息失败 {chunk_id}: {e}")
             return None
 
-    
+      def _generate_highlight(self, content: str, query: str) -> str:
+        """生成搜索高亮片段
+
+        Args:
+            content: 文本内容
+            query: 搜索查询词
+
+        Returns:
+            str: 高亮片段
+        """
+        if not content or not query:
+            return content[:100] + '...' if len(content) > 100 else content
+
+        # 查找查询词首次出现的位置
+        query_lower = query.lower()
+        content_lower = content.lower()
+        pos = content_lower.find(query_lower)
+
+        if pos == -1:
+            # 如果没找到，返回前100个字符
+            return content[:100] + '...' if len(content) > 100 else content
+
+        # 提取查询词周围的文本（前后各50字符）
+        start = max(0, pos - 50)
+        end = min(len(content), pos + len(query) + 50)
+
+        highlight = content[start:end]
+
+        # 如果不是从头开始，添加省略号
+        if start > 0:
+            highlight = '...' + highlight
+
+        # 如果不是到结尾，添加省略号
+        if end < len(content):
+            highlight = highlight + '...'
+
+        return highlight
+
     def _update_search_stats(self, response_time: float, used_chunk_search: bool):
         """更新搜索统计信息"""
         self.search_stats['total_searches'] += 1
@@ -471,16 +616,19 @@ class ChunkSearchService:
         """格式化兼容响应（与现有API完全一致）"""
         formatted_results = []
         for result in results:
+            # 映射文件类型到枚举值
+            file_type = self._map_file_type_to_enum(result.get('file_type', ''))
+
             formatted_result = {
                 'file_id': result.get('id', ''),
                 'file_name': result.get('file_name', ''),
                 'file_path': result.get('file_path', ''),
-                'file_type': result.get('file_type', ''),
+                'file_type': file_type,
                 'relevance_score': result.get('relevance_score', 0),
                 'preview_text': result.get('preview_text', ''),
                 'highlight': result.get('highlight', ''),
-                'created_at': result.get('created_at', ''),
-                'modified_at': result.get('modified_time', ''),
+                'created_at': result.get('created_at') if result.get('created_at') else None,
+                'modified_at': result.get('modified_time') if result.get('modified_time') else None,
                 'file_size': result.get('file_size', 0),
                 'match_type': result.get('match_type', 'unknown')
             }
@@ -554,8 +702,12 @@ def get_chunk_search_service() -> ChunkSearchService:
     global _chunk_search_service
     if _chunk_search_service is None:
         # 使用默认路径创建服务实例
-        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss/document_index_chunks.faiss')
+        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss') + '/document_index_chunks.faiss'
         chunk_whoosh_path = os.getenv('WHOOSH_INDEX_PATH', '../data/indexes/whoosh')
+
+        logger.info(f"初始化分块搜索服务:")
+        logger.info(f"  - Faiss索引路径: {chunk_faiss_path}")
+        logger.info(f"  - Whoosh索引路径: {chunk_whoosh_path}")
 
         _chunk_search_service = ChunkSearchService(
             chunk_faiss_index_path=chunk_faiss_path,

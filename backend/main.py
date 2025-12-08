@@ -15,7 +15,7 @@ from app.api import (
     index_router,
     config_router,
     system_router,
-    websocket_router
+    realtime_msg_router
 )
 
 # 配置日志系统
@@ -122,7 +122,7 @@ app.include_router(search_router)
 app.include_router(index_router)
 app.include_router(config_router)
 app.include_router(system_router)
-app.include_router(websocket_router)
+app.include_router(realtime_msg_router)  # 轮询式实时消息接口
 
 # 根路径
 @app.get("/")
