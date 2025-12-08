@@ -404,7 +404,7 @@ class ChunkSearchService:
 
     
     def _convert_chunk_to_standard_format(self, chunk_result: Dict[str, Any]) -> Dict[str, Any]:
-        """将分块结果转换为标准格式（保持API兼容性）"""
+        """将分块结果转换为标准格式"""
         return {
             'id': chunk_result.get('file_id', ''),
             'title': chunk_result.get('file_name', ''),
@@ -440,8 +440,6 @@ class ChunkSearchService:
 
     def _get_chunk_info(self, chunk_id: str) -> Optional[Dict[str, Any]]:
         """根据分块ID获取分块信息"""
-        # 这里应该从数据库或索引中获取分块信息
-        # 暂时返回模拟数据，实际实现需要查询file_chunks表
         try:
             from app.core.database import SessionLocal
             from app.models.file_chunk import FileChunkModel
