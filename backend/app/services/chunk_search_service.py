@@ -1,8 +1,5 @@
 """
 分块搜索服务
-
-扩展现有搜索功能，支持分块级搜索，提供透明的高精度搜索能力。
-保持与现有API的完全兼容性，前端无需任何改动。
 """
 
 import os
@@ -482,7 +479,7 @@ class ChunkSearchService:
             'file_name': chunk_result.get('file_name', ''),
             'file_type': file_type,
             'content': chunk_result.get('content', ''),
-            'preview_text': chunk_result.get('content', '')[:200],
+            'preview_text': self._generate_preview_text(chunk_result.get('content', '')),
             'relevance_score': chunk_result.get('relevance_score', 0),
             'match_type': chunk_result.get('match_type', 'chunk'),
             'file_size': chunk_result.get('file_size', 0),
@@ -528,11 +525,11 @@ class ChunkSearchService:
                     return None
 
                 # 生成预览文本和高亮
-            content = chunk.content or ''
-            preview_text = content[:200] + '...' if len(content) > 200 else content
-            highlight = self._generate_highlight(content, query) if query else content[:100] + '...' if len(content) > 100 else content
+                content = chunk.content or ''
+                preview_text = self._generate_preview_text(content)
+                highlight = self._generate_highlight(content, query) if query else content[:100] + '...' if len(content) > 100 else content
 
-            return {
+                return {
                     'id': str(file.id),
                     'chunk_id': str(chunk.id),
                     'file_id': str(chunk.file_id),
@@ -558,7 +555,18 @@ class ChunkSearchService:
             logger.error(f"获取分块信息失败 {chunk_id}: {e}")
             return None
 
-      def _generate_highlight(self, content: str, query: str) -> str:
+    def _generate_preview_text(self, content: str) -> str:
+        """生成预览文本，严格限制200字符"""
+        if not content:
+            return ''
+
+        # 严格限制预览文本为200字符
+        if len(content) > 197:  # 197 + '...' = 200
+            return content[:197] + '...'
+        else:
+            return content
+
+    def _generate_highlight(self, content: str, query: str) -> str:
         """生成搜索高亮片段
 
         Args:
