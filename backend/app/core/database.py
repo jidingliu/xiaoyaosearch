@@ -83,7 +83,7 @@ def init_database() -> None:
         # 初始化默认设置
         _init_default_settings()
 
-        logger.info(f"数据库初始化完成: {DATABASE_PATH}（已禁用外键约束，使用软外键模式）")
+        logger.info(f"数据库初始化完成: {DATABASE_PATH}")
 
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}")
