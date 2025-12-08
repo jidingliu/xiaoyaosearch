@@ -1,35 +1,35 @@
 # Web框架 - 核心依赖
 fastapi==0.104.1                 # Python Web框架
-uvicorn[standard]==0.24.0        # ASGI服务�?
+uvicorn[standard]==0.24.0        # ASGI服务器
 pydantic==2.5.0                  # 数据验证
 pydantic-settings==2.1.0         # 配置管理
 python-multipart==0.0.6          # 文件上传
 
-# 数据�?
-sqlalchemy==2.0.23               # SQL工具�?
-alembic==1.13.1                  # 数据库迁�?
+# 数据库
+sqlalchemy==2.0.23               # SQL工具包
+alembic==1.13.1                  # 数据库迁移
 
-# HTTP客户�?
-requests==2.31.0                 # HTTP请求�?
+# HTTP客户端
+requests==2.31.0                 # HTTP请求库
 
 # 系统监控
 psutil==5.9.6                    # 系统监控
 
-# 文件处理和解�?
+# 文件处理和解析
 PyPDF2==3.0.1                    # PDF文件处理
 python-docx==0.8.11              # Word文档处理
-docx2txt==0.9                    # Word文档文本提取（支�?doc�?docx�?
-doc2text==0.2.4                  # 经典Word文档(.doc)解析�?
-openpyxl==3.1.2                  # Excel文件处理�?xlsx格式�?
-xlrd==1.2.0                      # Excel文件处理�?xls格式�?
+docx2txt==0.9                    # Word文档文本提取（支持.doc和.docx格式）
+doc2text==0.2.4                  # 经典Word文档(.doc)解析器
+openpyxl==3.1.2                  # Excel文件处理（xlsx格式）
+xlrd==1.2.0                      # Excel文件处理（xls格式）
 python-pptx==0.6.21              # PowerPoint文档处理
 Pillow==10.1.0                   # 图像处理
-chardet==5.0.0                   # 编码检�?
-mutagen==1.46.0                  # 音频元数据提�?
-pytesseract==0.3.13              # OCR文字识别（doc2text依赖�?
+chardet==5.0.0                   # 编码检测
+mutagen==1.46.0                  # 音频元数据提取
+pytesseract==0.3.13              # OCR文字识别（doc2text依赖）
 
 # 搜索引擎基础 - 使用CUDA版本
-faiss-cpu==1.7.4                 # Facebook向量搜索 (CUDA版本)
+faiss-cpu==1.7.4                 # Facebook向量搜索 (CPU版本，如需GPU请使用faiss-gpu)
 whoosh==2.7.4                    # Python全文搜索
 jieba==0.42.1                    # 中文分词
 
@@ -37,37 +37,40 @@ jieba==0.42.1                    # 中文分词
 torch==2.1.0+cu121               # PyTorch深度学习框架 (CUDA 12.1)
 torch-audio==2.1.0+cu121         # PyTorch音频处理 (CUDA版本)
 torchvision==0.16.0+cu121        # PyTorch视觉处理 (CUDA版本)
-transformers==4.36.0             # HuggingFace transformers�?
-sentence-transformers==2.2.2     # 句子向量嵌入�?
-flagai==1.6.4                    # FlagAI模型�?
-openai==1.3.5                    # OpenAI API客户�?
+transformers==4.36.0             # HuggingFace transformers库
+sentence-transformers==2.2.2     # 句子向量嵌入库
+flagai==1.6.4                    # FlagAI模型库
+openai==1.3.5                    # OpenAI API客户端
 
 # 语音识别
 faster-whisper==0.9.0            # 加速版Whisper语音识别
 whisper==1.1.10                  # OpenAI Whisper语音识别
-librosa==0.11.0                   # 音频处理库（Whisper依赖�?
+librosa==0.11.0                   # 音频处理库（Whisper依赖）
 
 # 图像处理和CLIP模型
-pillow==10.1.0                   # 图像处理库（已有�?
+pillow==10.1.0                   # 图像处理库（已有）
 clip-by-openai==1.0              # CLIP模型
 
 # OCR文字识别
 paddlepaddle==2.5.2              # PaddlePaddle深度学习框架
-paddleocr==2.7.3                 # PaddleOCR文字识别�?
+paddleocr==2.7.3                 # PaddleOCR文字识别库
 
 # 大语言模型集成
-ollama-python==0.1.7             # Ollama Python客户�?
+ollama-python==0.1.7             # Ollama Python客户端
 langchain==0.0.340               # LangChain框架
 langchain-community==0.0.6       # LangChain社区组件
 
-# 模型优化和推理加�?
-accelerate==0.25.0               # PyTorch模型加�?
-optimum==1.15.0                  # 模型优化�?
-bitsandbytes==0.41.2             # 量化训练和推�?
+# 模型优化和推理加速
+accelerate==0.25.0               # PyTorch模型加速
+optimum==1.15.0                  # 模型优化库
+bitsandbytes==0.41.2             # 量化训练和推理
 
 # 云端API SDK
 dashscope==1.14.1                # 阿里云大模型SDK
-oss2==2.18.4                     # 阿里云对象存�?
+oss2==2.18.4                     # 阿里云对象存储
+
+# HuggingFace Hub (重要：需要与sentence-transformers兼容的版本)
+huggingface_hub==0.20.0          # HuggingFace模型库
 
 # 测试工具
 pytest==7.4.3                   # 测试框架
@@ -75,3 +78,9 @@ pytest-asyncio==0.21.1           # 异步测试
 
 # 新增依赖
 starlette==0.27.0                # ASGI框架，FastAPI依赖
+
+# 注意事项：
+# 1. 如需GPU加速，将faiss-cpu替换为faiss-gpu
+# 2. torch版本需要与你的CUDA版本匹配
+# 3. huggingface_hub版本需要与sentence-transformers兼容
+# 4. 部分依赖可能需要根据系统环境调整版本
