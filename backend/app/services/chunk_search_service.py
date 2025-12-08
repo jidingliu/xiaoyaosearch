@@ -16,42 +16,14 @@ from app.core.logging_config import get_logger
 from app.utils.enum_helpers import get_enum_value, is_semantic_search, is_fulltext_search, is_hybrid_search
 from app.schemas.enums import SearchType
 from app.services.chunk_service import get_chunk_service, ChunkService
-
-try:
-    import faiss
-    import numpy as np
-    FAISS_AVAILABLE = True
-except ImportError:
-    FAISS_AVAILABLE = False
-    logging.warning("faiss未安装，向量搜索功能不可用")
-
-try:
-    from whoosh import index, qparser
-    from whoosh.filedb.filestore import FileStorage
-    from whoosh.query import Query
-    WHOOSH_AVAILABLE = True
-except ImportError:
-    WHOOSH_AVAILABLE = False
-    # 注释掉模块级别的警告，避免误报
-    # logging.warning("whoosh未安装，全文搜索功能不可用")
-
-try:
-    from app.services.ai_model_manager import ai_model_service
-    AI_MODEL_SERVICE_AVAILABLE = True
-except ImportError as e:
-    AI_MODEL_SERVICE_AVAILABLE = False
-    ai_model_service = None
-    logger.warning(f"AI模型服务不可用: {e}")
+import faiss
+import numpy as np
+from whoosh import index, qparser
+from whoosh.filedb.filestore import FileStorage
+from whoosh.query import Query
+from app.services.ai_model_manager import ai_model_service
 
 logger = get_logger(__name__)
-
-
-def _check_search_dependencies():
-    """检查搜索依赖库是否可用，并在需要时输出警告"""
-    if not WHOOSH_AVAILABLE:
-        logger.warning("Whoosh未安装，全文搜索功能将不可用。请安装: pip install whoosh")
-    if not FAISS_AVAILABLE:
-        logger.warning("Faiss未安装，向量搜索功能将不可用。请安装: pip install faiss-cpu 或 faiss-gpu")
 
 
 class ChunkSearchService:
@@ -78,8 +50,6 @@ class ChunkSearchService:
             chunk_whoosh_index_path: 分块Whoosh索引目录路径
             use_ai_models: 是否使用AI模型进行搜索增强
         """
-        # 检查依赖库可用性（仅在初始化时检查一次，避免重复警告）
-        _check_search_dependencies()
         self.use_ai_models = use_ai_models
 
         self.chunk_faiss_index_path = chunk_faiss_index_path
@@ -121,7 +91,7 @@ class ChunkSearchService:
     def _load_chunk_indexes(self):
         """加载分块索引"""
         # 加载分块Faiss索引
-        if FAISS_AVAILABLE and os.path.exists(self.chunk_faiss_index_path):
+        if os.path.exists(self.chunk_faiss_index_path):
             self.chunk_faiss_index = faiss.read_index(self.chunk_faiss_index_path)
             chunk_metadata_path = self.chunk_faiss_index_path.replace('.faiss', '_metadata.pkl')
             if os.path.exists(chunk_metadata_path):
@@ -136,7 +106,7 @@ class ChunkSearchService:
             self.chunk_faiss_metadata = {}
 
         # 加载分块Whoosh索引
-        if WHOOSH_AVAILABLE and os.path.exists(self.chunk_whoosh_index_path):
+        if os.path.exists(self.chunk_whoosh_index_path):
             try:
                 self.chunk_whoosh_index = index.open_dir(self.chunk_whoosh_index_path)
                 logger.info("分块Whoosh索引加载成功")
@@ -229,7 +199,7 @@ class ChunkSearchService:
             # 1. 分块级语义搜索
             chunk_semantic_results = []
             if is_semantic_search(search_type) or is_hybrid_search(search_type):
-                if self.chunk_faiss_index and AI_MODEL_SERVICE_AVAILABLE:
+                if self.chunk_faiss_index:
                     chunk_semantic_results = await self._chunk_semantic_search(query, limit, threshold)
 
             # 2. 分块级全文搜索
@@ -584,7 +554,7 @@ def get_chunk_search_service() -> ChunkSearchService:
     global _chunk_search_service
     if _chunk_search_service is None:
         # 使用默认路径创建服务实例
-        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss').replace('.faiss', '_chunks.faiss')
+        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss/document_index_chunks.faiss')
         chunk_whoosh_path = os.getenv('WHOOSH_INDEX_PATH', '../data/indexes/whoosh')
 
         _chunk_search_service = ChunkSearchService(

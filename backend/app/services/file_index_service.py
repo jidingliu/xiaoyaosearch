@@ -16,17 +16,9 @@ import logging
 from .file_scanner import FileScanner, FileInfo
 from .metadata_extractor import MetadataExtractor
 from .content_parser import ContentParser, ParsedContent
+from .chunk_index_service import get_chunk_index_service
 
 logger = logging.getLogger(__name__)
-
-# 导入分块索引服务（主要索引服务）
-try:
-    from .chunk_index_service import get_chunk_index_service
-    CHUNK_INDEX_AVAILABLE = True
-    logger.info("分块索引服务导入成功")
-except ImportError as e:
-    CHUNK_INDEX_AVAILABLE = False
-    logger.warning(f"分块索引服务不可用: {e}")
 
 
 class FileIndexService:
@@ -262,36 +254,30 @@ class FileIndexService:
             index_success = False
             index_error = None  # 用于记录详细的错误信息
 
-            logger.info(f"分块索引可用性检查: {CHUNK_INDEX_AVAILABLE}, 文档数量: {len(documents)}")
+            try:
+                if progress_callback:
+                    progress_callback("构建分块索引", 85.0)
 
-            if CHUNK_INDEX_AVAILABLE:
-                try:
-                    if progress_callback:
-                        progress_callback("构建分块索引", 85.0)
+                logger.info("开始构建分块索引")
+                chunk_index_service = get_chunk_index_service()
+                logger.info("分块索引服务获取成功")
 
-                    logger.info("开始构建分块索引")
-                    chunk_index_service = get_chunk_index_service()
-                    logger.info("分块索引服务获取成功")
+                chunk_index_success = await chunk_index_service.build_chunk_indexes(documents)
+                logger.info(f"分块索引构建完成，结果: {chunk_index_success}")
 
-                    chunk_index_success = await chunk_index_service.build_chunk_indexes(documents)
-                    logger.info(f"分块索引构建完成，结果: {chunk_index_success}")
+                if chunk_index_success:
+                    logger.info("分块索引构建成功")
+                    index_success = True  # 分块索引成功代表整体成功
+                else:
+                    logger.warning("分块索引构建失败")
+                    index_error = "分块索引构建失败：Faiss向量索引或Whoosh全文索引构建失败"
 
-                    if chunk_index_success:
-                        logger.info("分块索引构建成功")
-                        index_success = True  # 分块索引成功代表整体成功
-                    else:
-                        logger.warning("分块索引构建失败")
-                        index_error = "分块索引构建失败：Faiss向量索引或Whoosh全文索引构建失败"
-
-                except Exception as e:
-                    logger.error(f"构建分块索引失败: {e}")
-                    import traceback
-                    logger.error(f"详细错误信息: {traceback.format_exc()}")
-                    chunk_index_success = False
-                    index_error = f"分块索引构建异常：{str(e)}"
-            else:
-                logger.warning("分块索引服务不可用，无法构建索引")
-                index_error = "分块索引服务不可用：请检查依赖和配置"
+            except Exception as e:
+                logger.error(f"构建分块索引失败: {e}")
+                import traceback
+                logger.error(f"详细错误信息: {traceback.format_exc()}")
+                chunk_index_success = False
+                index_error = f"分块索引构建异常：{str(e)}"
 
             # 5. 更新缓存和状态
             if index_success:
@@ -308,7 +294,7 @@ class FileIndexService:
 
             # 获取分块索引统计信息
             chunk_index_stats = {}
-            if CHUNK_INDEX_AVAILABLE and chunk_index_success:
+            if chunk_index_success:
                 try:
                     chunk_index_service = get_chunk_index_service()
                     chunk_index_stats = chunk_index_service.get_index_stats()
@@ -322,7 +308,6 @@ class FileIndexService:
                 'failed_files': failed_count,
                 'duration_seconds': duration.total_seconds(),
                 'chunk_index_stats': chunk_index_stats,
-                'chunk_index_available': CHUNK_INDEX_AVAILABLE,
                 'chunk_index_success': chunk_index_success,
                 'error': index_error  # 添加详细的错误信息
             }
@@ -378,21 +363,13 @@ class FileIndexService:
             logger.info(f"开始增量更新索引，扫描路径: {scan_paths}")
             start_time = datetime.now()
 
-            # 1. 检查索引是否存在
-            if not CHUNK_INDEX_AVAILABLE:
-                logger.warning("分块索引服务不可用，无法执行增量更新")
-                return {
-                    'success': False,
-                    'error': '分块索引服务不可用'
-                }
-
             chunk_index_service = get_chunk_index_service()
             if not chunk_index_service._chunk_indexes_exist():
                 logger.info("索引不存在，执行完整索引构建")
                 # 直接同步调用，因为build_full_index会处理异步操作
                 return self._build_full_index_sync(scan_paths)
 
-            # 2. 扫描文件变更
+            # 1. 扫描文件变更
             all_changes = []
             all_deletions = []
 
@@ -429,7 +406,7 @@ class FileIndexService:
                     'deleted_files': 0
                 }
 
-            # 3. 处理变更的文件
+            # 2. 处理变更的文件
             new_documents = []
             for file_info in all_changes:
                 try:
@@ -439,13 +416,13 @@ class FileIndexService:
                 except Exception as e:
                     logger.error(f"处理变更文件失败 {file_info.path}: {e}")
 
-            # 4. 保存变更文件到数据库（确保获得正确的整数ID）
+            # 3. 保存变更文件到数据库（确保获得正确的整数ID）
             if new_documents:
                 logger.info(f"开始保存 {len(new_documents)} 个变更文件到数据库")
                 await self._save_files_to_database(all_changes, new_documents)
                 logger.info("变更文件保存到数据库完成")
 
-            # 5. 从索引中删除已删除的文件
+            # 4. 从索引中删除已删除的文件
             deleted_count = 0
             if all_deletions:
                 logger.info(f"开始删除 {len(all_deletions)} 个已删除文件的索引")
@@ -463,13 +440,13 @@ class FileIndexService:
 
                 logger.info(f"文件索引删除完成，总共删除了 {deleted_count} 个分块")
 
-            # 6. 添加新文档到索引
+            # 5. 添加新文档到索引
             if new_documents:
                 chunk_index_success = await chunk_index_service.build_chunk_indexes(new_documents)
                 if not chunk_index_success:
                     logger.warning("增量更新中构建分块索引失败，但继续处理")
 
-            # 7. 更新缓存
+            # 6. 更新缓存
             # 从缓存中移除已删除的文件
             for deleted_path in all_deletions:
                 self._indexed_files_cache.pop(deleted_path, None)
@@ -763,19 +740,18 @@ class FileIndexService:
         """获取索引状态"""
         status = self.index_status.copy()
 
-        # 如果分块索引可用，添加分块索引统计
-        if CHUNK_INDEX_AVAILABLE:
-            try:
-                chunk_index_service = get_chunk_index_service()
-                chunk_stats = chunk_index_service.get_index_stats()
-                status.update({
-                    'chunk_faiss_index_exists': chunk_stats.get('chunk_faiss_index_exists', False),
-                    'chunk_whoosh_index_exists': chunk_stats.get('chunk_whoosh_index_exists', []),
-                    'total_chunks_created': chunk_stats.get('total_chunks_created', 0),
-                    'chunk_faiss_index_size': chunk_stats.get('chunk_faiss_index_size', 0)
-                })
-            except Exception as e:
-                logger.warning(f"获取分块索引统计失败: {e}")
+        # 添加分块索引统计
+        try:
+            chunk_index_service = get_chunk_index_service()
+            chunk_stats = chunk_index_service.get_index_stats()
+            status.update({
+                'chunk_faiss_index_exists': chunk_stats.get('chunk_faiss_index_exists', False),
+                'chunk_whoosh_index_exists': chunk_stats.get('chunk_whoosh_index_exists', []),
+                'total_chunks_created': chunk_stats.get('total_chunks_created', 0),
+                'chunk_faiss_index_size': chunk_stats.get('chunk_faiss_index_size', 0)
+            })
+        except Exception as e:
+            logger.warning(f"获取分块索引统计失败: {e}")
 
         # 添加缓存状态信息
         status.update({
@@ -835,14 +811,6 @@ class FileIndexService:
         try:
             # 生成文档ID
             doc_id = self._generate_document_id_from_path(file_path)
-
-            # 使用分块索引服务删除文件
-            if not CHUNK_INDEX_AVAILABLE:
-                return {
-                    'success': False,
-                    'error': '分块索引服务不可用',
-                    'file_path': file_path
-                }
 
             chunk_index_service = get_chunk_index_service()
             delete_result = await chunk_index_service.delete_file_from_indexes(file_path)

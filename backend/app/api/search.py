@@ -17,23 +17,11 @@ from app.schemas.responses import (
 from app.schemas.enums import InputType, SearchType
 from app.models.search_history import SearchHistoryModel
 from app.utils.enum_helpers import get_enum_value, is_semantic_search, is_hybrid_search, is_text_input, is_voice_input, is_image_input
-# AI模型服务导入状态
-AI_MODEL_SERVICE_AVAILABLE = False
-ai_model_service = None
 from app.services.chunk_search_service import get_chunk_search_service
+from app.services.ai_model_manager import ai_model_service
 
 router = APIRouter(prefix="/api/search", tags=["搜索服务"])
 logger = get_logger(__name__)
-
-# 在logger定义后导入AI模型服务
-try:
-    from app.services.ai_model_manager import ai_model_service
-    AI_MODEL_SERVICE_AVAILABLE = True
-    logger.info("AI模型服务导入成功")
-except ImportError as e:
-    AI_MODEL_SERVICE_AVAILABLE = False
-    ai_model_service = None
-    logger.warning(f"AI模型服务不可用: {e}")
 
 
 @router.post("/", response_model=SearchResponse, summary="文本搜索")
@@ -201,9 +189,6 @@ async def multimodal_search(
 
         if is_voice_input(input_type):
             # 语音转文字
-            if not AI_MODEL_SERVICE_AVAILABLE:
-                raise HTTPException(status_code=503, detail="AI模型服务不可用，无法处理语音输入")
-
             logger.info("使用FasterWhisper进行语音识别")
             transcription_result = await ai_model_service.speech_to_text(
                 file_content,
@@ -215,9 +200,6 @@ async def multimodal_search(
 
         elif is_image_input(input_type):
             # 图像理解生成搜索查询
-            if not AI_MODEL_SERVICE_AVAILABLE:
-                raise HTTPException(status_code=503, detail="AI模型服务不可用，无法处理图像输入")
-
             logger.info("使用CN-CLIP进行图像理解")
             texts = [
                 "描述这张图片的内容",
@@ -237,7 +219,7 @@ async def multimodal_search(
         search_results = []
         if converted_text:
             # 获取搜索查询的嵌入向量
-            if (is_semantic_search(search_type) or is_hybrid_search(search_type)) and AI_MODEL_SERVICE_AVAILABLE:
+            if (is_semantic_search(search_type) or is_hybrid_search(search_type)):
                 await ai_model_service.text_embedding(converted_text, normalize_embeddings=True)
                 ai_models_used.append("BGE-M3")
 

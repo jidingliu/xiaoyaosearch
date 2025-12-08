@@ -8,7 +8,7 @@
 import os
 import pickle
 import time
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -16,54 +16,14 @@ from pathlib import Path
 from app.utils.snowflake import generate_snowflake_id
 from app.core.logging_config import get_logger
 from app.services.chunk_service import get_chunk_service, ChunkInfo
-
-try:
-    import faiss
-    import numpy as np
-    FAISS_AVAILABLE = True
-except ImportError:
-    FAISS_AVAILABLE = False
-    logging.warning("faiss未安装，向量索引功能不可用")
+import faiss
+import numpy as np
+import whoosh
+from whoosh import index
+from whoosh import fields
+from app.services.ai_model_manager import ai_model_service
 
 logger = get_logger(__name__)
-
-try:
-    # 简化导入，避免具体模块导入问题
-    import whoosh
-    from whoosh import index
-    from whoosh import fields
-    WHOOSH_AVAILABLE = True
-    logger.info("Whoosh模块导入成功")
-except ImportError as e:
-    WHOOSH_AVAILABLE = False
-    # 创建占位符避免运行时错误
-    class MockModule:
-        def __getattr__(self, name):
-            return None
-    index = fields = MockModule()
-    logger.error(f"Whoosh导入失败: {e}")
-
-try:
-    from app.services.ai_model_manager import ai_model_service
-    AI_MODEL_SERVICE_AVAILABLE = True
-except ImportError as e:
-    AI_MODEL_SERVICE_AVAILABLE = False
-    ai_model_service = None
-    logger.warning(f"AI模型服务不可用: {e}")
-
-
-def _check_dependencies():
-    """检查依赖库是否可用，并在需要时输出警告"""
-    if not WHOOSH_AVAILABLE:
-        logger.warning("Whoosh未安装，全文索引功能将不可用。请安装: pip install whoosh")
-    if not FAISS_AVAILABLE:
-        logger.warning("Faiss未安装，向量索引功能将不可用。请安装: pip install faiss-cpu 或 faiss-gpu")
-    if not AI_MODEL_SERVICE_AVAILABLE:
-        logger.warning("AI模型服务不可用，智能功能将受限")
-
-    # 输出依赖状态信息
-    logger.info(f"依赖状态: Faiss={FAISS_AVAILABLE}, Whoosh={WHOOSH_AVAILABLE}, AI模型服务={AI_MODEL_SERVICE_AVAILABLE}")
-
 
 class ChunkIndexService:
     """分块索引服务
@@ -78,27 +38,19 @@ class ChunkIndexService:
 
     def __init__(
         self,
-        faiss_index_path: str,
-        whoosh_index_path: str,
-        chunk_faiss_index_path: Optional[str] = None,
-        chunk_whoosh_index_path: Optional[str] = None,
+        chunk_faiss_index_path: str,
+        chunk_whoosh_index_path: str,
         use_ai_models: bool = True,
         chunk_strategy: str = None
     ):
         """初始化分块索引服务
 
         Args:
-            faiss_index_path: 传统Faiss索引文件路径
-            whoosh_index_path: 传统Whoosh索引目录路径
             chunk_faiss_index_path: 分块Faiss索引文件路径
             chunk_whoosh_index_path: 分块Whoosh索引目录路径
             use_ai_models: 是否使用AI模型
             chunk_strategy: 分块策略
         """
-        # 检查依赖库可用性（仅在初始化时检查一次，避免重复警告）
-        _check_dependencies()
-        self.faiss_index_path = faiss_index_path
-        self.whoosh_index_path = whoosh_index_path
         self.use_ai_models = use_ai_models
 
         # 从统一配置文件读取默认分块策略
@@ -109,12 +61,6 @@ class ChunkIndexService:
         self.chunk_strategy = chunk_strategy
 
         # 设置分块索引路径
-        if not chunk_faiss_index_path:
-            chunk_faiss_index_path = faiss_index_path.replace('.faiss', '_chunks.faiss')
-        if not chunk_whoosh_index_path:
-            # 分块Whoosh索引使用同一个目录，但使用不同的schema��文件结构
-            chunk_whoosh_index_path = whoosh_index_path  # 使用相同的whoosh目录
-
         self.chunk_faiss_index_path = chunk_faiss_index_path
         self.chunk_whoosh_index_path = chunk_whoosh_index_path
 
@@ -130,7 +76,6 @@ class ChunkIndexService:
             'total_documents_processed': 0,
             'total_chunks_created': 0,
             'chunked_documents': 0,
-            'traditional_documents': 0,
             'avg_chunks_per_document': 0.0,
             'embedding_batch_size': settings.chunk.chunk_embedding_batch_size,
             'last_index_time': None
@@ -144,7 +89,7 @@ class ChunkIndexService:
         """构建分块索引
 
         Args:
-            documents: 文档列表
+            documents: 文档列表（所有文档都将进行分块处理）
 
         Returns:
             bool: 构建是否成功
@@ -153,27 +98,28 @@ class ChunkIndexService:
             logger.info(f"开始构建分块索引，文档数量: {len(documents)}")
             start_time = datetime.now()
 
-            # 1. 分离需要分块的文档和传统文档
-            chunked_docs, traditional_docs = self._separate_documents(documents)
+            # 1. 过滤出需要分块的文档
+            chunked_docs = []
+            for doc in documents:
+                if self._should_chunk_document(doc.get('content', ''), doc.get('file_type', '')):
+                    chunked_docs.append(doc)
+                else:
+                    logger.info(f"文档 {doc.get('file_name', 'unknown')} 长度不足，跳过分块处理")
 
-            logger.info(f"需要分块的文档: {len(chunked_docs)}, 传统文档: {len(traditional_docs)}")
+            logger.info(f"实际需要分块的文档: {len(chunked_docs)}")
 
-            # 2. 处理需要分块的文档
+            # 2. 处理分块文档
             if chunked_docs:
                 success = await self._process_chunked_documents(chunked_docs)
                 if not success:
                     logger.error("分块文档处理失败")
                     return False
+            else:
+                logger.info("没有需要分块的文档")
+                return True
 
-            # 3. 处理传统文档（确保所有文档都在file_chunks表中有记录）
-            if traditional_docs:
-                success = await self._process_traditional_documents(traditional_docs)
-                if not success:
-                    logger.error("传统文档处理失败")
-                    return False
-
-            # 4. 更新统计信息
-            self._update_index_stats(len(chunked_docs), len(traditional_docs))
+            # 3. 更新统计信息
+            self._update_index_stats(len(chunked_docs))
             self.index_stats['last_index_time'] = datetime.now()
 
             duration = datetime.now() - start_time
@@ -185,30 +131,7 @@ class ChunkIndexService:
             logger.error(f"构建分块索引失败: {e}")
             return False
 
-    def _separate_documents(self, documents: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """分离需要分块的文档和传统文档
-
-        Args:
-            documents: 文档列表
-
-        Returns:
-            Tuple[List[Dict], List[Dict]]: (需要分块的文档, 传统文档)
-        """
-        chunked_docs = []
-        traditional_docs = []
-
-        for doc in documents:
-            content = doc.get('content', '')
-            file_type = doc.get('file_type', '')
-
-            # 判断是否需要分块
-            if self._should_chunk_document(content, file_type):
-                chunked_docs.append(doc)
-            else:
-                traditional_docs.append(doc)
-
-        return chunked_docs, traditional_docs
-
+  
     def _should_chunk_document(self, content: str, file_type: str) -> bool:
         """判断文档是否需要分块
 
@@ -272,7 +195,7 @@ class ChunkIndexService:
                 logger.info(f"生成Whoosh文档ID: {whoosh_doc_ids}")
 
             # 3. 构建分块Faiss向量索引（使用雪花ID）
-            if FAISS_AVAILABLE and self.use_ai_models and AI_MODEL_SERVICE_AVAILABLE and all_chunks:
+            if self.use_ai_models and all_chunks:
                 logger.info(f"开始构建分块Faiss向量索引，分块数量: {len(all_chunks)}")
                 faiss_success = await self._build_chunk_faiss_index_with_ids(all_chunks, faiss_index_ids)
                 if not faiss_success:
@@ -283,7 +206,7 @@ class ChunkIndexService:
                 faiss_success = True
 
             # 4. 构建分块Whoosh全文索引（使用雪花ID）
-            if WHOOSH_AVAILABLE and all_chunks:
+            if all_chunks:
                 logger.info(f"开始构建分块Whoosh全文索引，分块数量: {len(all_chunks)}")
                 whoosh_success = await self._build_chunk_whoosh_index_with_ids(all_chunks, whoosh_doc_ids)
                 if not whoosh_success:
@@ -744,69 +667,6 @@ class ChunkIndexService:
             logger.warning(f"关键词提取失败: {e}")
             return []
 
-    async def _process_traditional_documents(self, documents: List[Dict[str, Any]]) -> bool:
-        """处理传统文档（将它们作为单个分块添加到分块索引中）
-
-        Args:
-            documents: 传统文档列表
-
-        Returns:
-            bool: 处理是否成功
-        """
-        try:
-            logger.info(f"处理 {len(documents)} 个传统文档作为单分块")
-
-            # 将传统文档转换为单分块格式
-            single_chunks = []
-            for doc in documents:
-                chunk_data = {
-                    'file_id': doc.get('id', ''),
-                    'chunk_index': 0,
-                    'content': doc.get('content', ''),
-                    'content_length': len(doc.get('content', '')),
-                    'start_position': 0,
-                    'end_position': len(doc.get('content', '')),
-                    'file_name': doc.get('file_name', ''),
-                    'file_path': doc.get('file_path', ''),
-                    'file_type': doc.get('file_type', ''),
-                    'file_size': doc.get('file_size', 0),
-                    'modified_time': doc.get('modified_time', ''),
-                    'created_at': datetime.now()
-                }
-                single_chunks.append(chunk_data)
-
-            # 生成索引ID
-            faiss_index_ids = []
-            whoosh_doc_ids = []
-
-            if single_chunks:
-                logger.info("为传统文档生成索引ID...")
-                for i in enumerate(single_chunks):
-                    # Faiss索引ID
-                    if FAISS_AVAILABLE and self.use_ai_models and AI_MODEL_SERVICE_AVAILABLE:
-                        faiss_id = generate_snowflake_id(machine_id=1 + i[0] % 1024)
-                        faiss_index_ids.append(faiss_id)
-
-                    # Whoosh文档ID
-                    if WHOOSH_AVAILABLE:
-                        whoosh_id = str(generate_snowflake_id(machine_id=1 + (i[0] + 1000) % 1024))
-                        whoosh_doc_ids.append(whoosh_id)
-
-            # 直接保存到数据库（不重复构建索引，因为传统文档已经在主索引中）
-            db_success = await self._save_chunks_to_database(single_chunks, faiss_index_ids, whoosh_doc_ids)
-            if not db_success:
-                logger.warning("传统文档数据保存失败")
-                return False
-
-            # 更新files表的分块状态（标记为单分块）
-            await self._update_files_chunk_status(single_chunks, is_traditional=True)
-
-            return True
-
-        except Exception as e:
-            logger.error(f"处理传统文档失败: {e}")
-            return False
-
     async def _save_chunks_to_database(self, chunks: List[Dict[str, Any]], faiss_index_ids: List[int] = None, whoosh_doc_ids: List[str] = None) -> bool:
         """保存分块数据到数据库并更新files表的分块状态
 
@@ -886,12 +746,11 @@ class ChunkIndexService:
             logger.error(f"保存分块到数据库失败: {e}")
             return False
 
-    async def _update_files_chunk_status(self, chunks: List[Dict[str, Any]], is_traditional: bool = False) -> None:
+    async def _update_files_chunk_status(self, chunks: List[Dict[str, Any]]) -> None:
         """更新files表的分块状态
 
         Args:
             chunks: 分块列表
-            is_traditional: 是否为传统文档（单分块）
         """
         try:
             from app.core.database import SessionLocal
@@ -919,13 +778,13 @@ class ChunkIndexService:
                             # 更新分块相关字段
                             file_record.is_chunked = True
                             file_record.total_chunks = total_chunks
-                            file_record.chunk_strategy = self.chunk_strategy if not is_traditional else 'single_chunk'
+                            file_record.chunk_strategy = self.chunk_strategy
                             file_record.avg_chunk_size = sum(
                                 int(c.get('content_length', 0)) for c in chunks
                                 if c.get('file_id') == file_id
                             ) // total_chunks if total_chunks > 0 else 500
 
-                            logger.debug(f"更新文件 {file_id} 分块状态: {total_chunks} 个分块 ({'传统' if is_traditional else '分块'})")
+                            logger.debug(f"更新文件 {file_id} 分块状态: {total_chunks} 个分块")
                         else:
                             logger.warning(f"未找到文件记录 ID: {file_id}")
 
@@ -947,14 +806,14 @@ class ChunkIndexService:
         whoosh_exists = os.path.exists(self.chunk_whoosh_index_path) and os.listdir(self.chunk_whoosh_index_path)
         return faiss_exists or whoosh_exists
 
-    def _update_index_stats(self, chunked_count: int, traditional_count: int):
+    def _update_index_stats(self, chunked_count: int):
         """更新索引统计信息"""
-        self.index_stats['total_documents_processed'] += chunked_count + traditional_count
-        self.index_stats['chunked_documents'] += chunked_count
-        self.index_stats['traditional_documents'] += traditional_count
-
         # 估算总分块数（假设平均每个文档3个分块）
-        self.index_stats['total_chunks_created'] += chunked_count * 3 + traditional_count
+        estimated_chunks = chunked_count * 3
+
+        self.index_stats['total_documents_processed'] += chunked_count
+        self.index_stats['chunked_documents'] += chunked_count
+        self.index_stats['total_chunks_created'] += estimated_chunks
 
         # 计算平均分块数
         total_docs = self.index_stats['total_documents_processed']
@@ -974,13 +833,13 @@ class ChunkIndexService:
             logger.info(f"开始增量更新分块索引，新分块数: {len(new_chunks)}")
 
             # 1. 更新Faiss索引（如果存在）
-            if FAISS_AVAILABLE and os.path.exists(self.chunk_faiss_index_path):
+            if os.path.exists(self.chunk_faiss_index_path):
                 faiss_success = await self._update_faiss_index(new_chunks)
             else:
                 faiss_success = True  # 如果没有索引，认为更新成功
 
             # 2. 更新Whoosh索引（如果存在）
-            if WHOOSH_AVAILABLE and os.path.exists(self.chunk_whoosh_index_path):
+            if os.path.exists(self.chunk_whoosh_index_path):
                 whoosh_success = await self._update_whoosh_index(new_chunks)
             else:
                 whoosh_success = True
@@ -1363,10 +1222,6 @@ class ChunkIndexService:
                 logger.error(f"分块数量({len(chunks)})与ID数量({len(pregenerated_ids)})不匹配")
                 return False
 
-            if not WHOOSH_AVAILABLE:
-                logger.warning("Whoosh未安装，跳过全文索引构建")
-                return False
-
             from whoosh import fields, index
             from whoosh.analysis import StandardAnalyzer
             from whoosh.writing import AsyncWriter
@@ -1639,13 +1494,12 @@ def get_chunk_index_service() -> ChunkIndexService:
     global _chunk_index_service
     if _chunk_index_service is None:
         # 使用默认路径创建服务实例
-        data_root = os.getenv('DATA_ROOT', '../data')
-        faiss_path = os.path.join(data_root, 'indexes/faiss/document_index.faiss')
-        whoosh_path = os.path.join(data_root, 'indexes/whoosh')
+        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss/document_index_chunks.faiss')
+        chunk_whoosh_path = os.getenv('WHOOSH_INDEX_PATH', '../data/indexes/whoosh')
 
         _chunk_index_service = ChunkIndexService(
-            faiss_index_path=faiss_path,
-            whoosh_index_path=whoosh_path,
+            chunk_faiss_index_path=chunk_faiss_path,
+            chunk_whoosh_index_path=chunk_whoosh_path,
             use_ai_models=True
         )
 

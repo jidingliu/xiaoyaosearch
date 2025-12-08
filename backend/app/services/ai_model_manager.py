@@ -6,13 +6,7 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
-
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-    np = None
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +321,7 @@ class AIModelService:
                 batch_embeddings = await self.text_embedding(batch_texts, **kwargs)
 
                 # 处理numpy数组返回值
-                if NUMPY_AVAILABLE and np is not None and isinstance(batch_embeddings, np.ndarray):
+                if isinstance(batch_embeddings, np.ndarray):
                     if batch_embeddings.ndim == 2:
                         # 标准情况: (batch_size, embedding_dim)
                         batch_list = batch_embeddings.tolist()
@@ -342,7 +336,7 @@ class AIModelService:
                 elif isinstance(batch_embeddings, list):
                     # 如果是列表，需要检查元素类型
                     for emb in batch_embeddings:
-                        if NUMPY_AVAILABLE and np is not None and isinstance(emb, np.ndarray):
+                        if isinstance(emb, np.ndarray):
                             if emb.ndim > 1:
                                 all_embeddings.append(emb.flatten().tolist())
                             else:

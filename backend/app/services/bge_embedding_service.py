@@ -10,8 +10,10 @@ from typing import List, Dict, Any, Optional, Union
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
+from sentence_transformers import SentenceTransformer
+
 try:
-    from sentence_transformers import SentenceTransformer
+    
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
@@ -121,7 +123,7 @@ class BGEEmbeddingService(BaseAIModel):
         cache_dir = self.config.get("cache_dir")
 
         # 根据配置选择加载方式
-        if self.config.get("use_sentence_transformers", True) and SENTENCE_TRANSFORMERS_AVAILABLE:
+        if self.config.get("use_sentence_transformers", True):
             logger.info("使用SentenceTransformers加载BGE-M3模型")
             self.sentence_transformer = SentenceTransformer(
                 model_name,
@@ -255,7 +257,7 @@ class BGEEmbeddingService(BaseAIModel):
         Returns:
             np.ndarray: 嵌入向量数组
         """
-        if self.sentence_transformer and SENTENCE_TRANSFORMERS_AVAILABLE:
+        if self.sentence_transformer:
             # 使用SentenceTransformers编码
             embeddings = self.sentence_transformer.encode(
                 texts,

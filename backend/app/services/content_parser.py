@@ -47,41 +47,12 @@ except ImportError:
     def get_format_display_name(extension: str) -> str:
         return extension.upper()
 
-# 文件处理库导入
-try:
-    import chardet
-    CHARDET_AVAILABLE = True
-except ImportError:
-    CHARDET_AVAILABLE = False
-    logging.warning("chardet未安装，编码检测功能不可用")
+import chardet
+from PyPDF2 import PdfReader
+from docx import Document
+from openpyxl import load_workbook
+from pptx import Presentation
 
-try:
-    from PyPDF2 import PdfReader
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
-    logging.warning("PyPDF2未安装，PDF内容提取功能不可用")
-
-try:
-    from docx import Document
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-    logging.warning("python-docx未安装，Word文档内容提取功能不可用")
-
-try:
-    from openpyxl import load_workbook
-    EXCEL_AVAILABLE = True
-except ImportError:
-    EXCEL_AVAILABLE = False
-    logging.warning("openpyxl未安装，Excel文档内容提取功能不可用")
-
-try:
-    from pptx import Presentation
-    PPTX_AVAILABLE = True
-except ImportError:
-    PPTX_AVAILABLE = False
-    logging.warning("python-pptx未安装，PowerPoint文档内容提取功能不可用")
 
 logger = logging.getLogger(__name__)
 
@@ -234,9 +205,6 @@ class ContentParser:
 
     def _parse_pdf(self, path: Path) -> ParsedContent:
         """解析PDF文件内容"""
-        if not PDF_AVAILABLE:
-            return ParsedContent(text="", error="PDF解析库不可用")
-
         try:
             text_parts = []
             title = None
@@ -275,9 +243,6 @@ class ContentParser:
 
     def _parse_docx(self, path: Path) -> ParsedContent:
         """解析Word文档内容"""
-        if not DOCX_AVAILABLE:
-            return ParsedContent(text="", error="Word文档解析库不可用")
-
         try:
             doc = Document(str(path))
 
@@ -524,9 +489,6 @@ class ContentParser:
 
     def _parse_pptx(self, path: Path) -> ParsedContent:
         """解析PowerPoint文档内容"""
-        if not PPTX_AVAILABLE:
-            return ParsedContent(text="", error="PowerPoint解析库不可用")
-
         try:
             prs = Presentation(str(path))
             slide_texts = []
@@ -673,17 +635,16 @@ class ContentParser:
         encodings_to_try = self.encoding_priority.copy()
 
         # 如果有chardet，先检测编码
-        if CHARDET_AVAILABLE:
-            try:
-                with open(path, 'rb') as f:
-                    raw_data = f.read(10240)  # 读取前10KB进行检测
-                result = chardet.detect(raw_data)
-                if result and result['confidence'] > 0.7:
-                    detected_encoding = result['encoding']
-                    if detected_encoding and detected_encoding not in encodings_to_try:
-                        encodings_to_try.insert(0, detected_encoding)
-            except Exception as e:
-                logger.warning(f"编码检测失败 {path}: {e}")
+        try:
+            with open(path, 'rb') as f:
+                raw_data = f.read(10240)  # 读取前10KB进行检测
+            result = chardet.detect(raw_data)
+            if result and result['confidence'] > 0.7:
+                detected_encoding = result['encoding']
+                if detected_encoding and detected_encoding not in encodings_to_try:
+                    encodings_to_try.insert(0, detected_encoding)
+        except Exception as e:
+            logger.warning(f"编码检测失败 {path}: {e}")
 
         # 尝试不同编码读取文件
         for encoding in encodings_to_try:

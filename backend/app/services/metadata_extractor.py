@@ -11,50 +11,14 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 import logging
+from PyPDF2 import PdfReader
+from docx import Document
+from openpyxl import load_workbook
+from pptx import Presentation
+from mutagen import File as MutagenFile
+from PIL import Image
+from PIL.ExifTags import TAGS
 
-# 文件处理库导入
-try:
-    from PyPDF2 import PdfReader
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
-    logging.warning("PyPDF2未安装，PDF元数据提取功能不可用")
-
-try:
-    from docx import Document
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-    logging.warning("python-docx未安装，Word文档元数据提取功能不可用")
-
-try:
-    from openpyxl import load_workbook
-    EXCEL_AVAILABLE = True
-except ImportError:
-    EXCEL_AVAILABLE = False
-    logging.warning("openpyxl未安装，Excel文档元数据提取功能不可用")
-
-try:
-    from pptx import Presentation
-    PPTX_AVAILABLE = True
-except ImportError:
-    PPTX_AVAILABLE = False
-    logging.warning("python-pptx未安装，PowerPoint文档元数据提取功能不可用")
-
-try:
-    from mutagen import File as MutagenFile
-    AUDIO_AVAILABLE = True
-except ImportError:
-    AUDIO_AVAILABLE = False
-    logging.warning("mutagen未安装，音频元数据提取功能不可用")
-
-try:
-    from PIL import Image
-    from PIL.ExifTags import TAGS
-    IMAGE_AVAILABLE = True
-except ImportError:
-    IMAGE_AVAILABLE = False
-    logging.warning("Pillow未安装，图像元数据提取功能不可用")
 
 logger = logging.getLogger(__name__)
 
