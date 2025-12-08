@@ -62,6 +62,10 @@ async def search_files(
         # 获取分块搜索服务
         search_service = get_chunk_search_service()
 
+        # 调试信息
+        logger.info(f"搜索服务状态: is_ready={search_service.is_ready()}")
+        logger.info(f"索引状态: {search_service.get_index_info()}")
+
         # 检查搜索服务是否就绪
         if not search_service.is_ready():
             logger.warning("搜索服务未就绪，返回空结果")

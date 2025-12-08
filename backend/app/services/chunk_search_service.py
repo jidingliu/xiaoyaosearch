@@ -67,33 +67,20 @@ class ChunkSearchService:
 
     def __init__(
         self,
-        faiss_index_path: str,
-        whoosh_index_path: str,
-        chunk_faiss_index_path: Optional[str] = None,
-        chunk_whoosh_index_path: Optional[str] = None,
+        chunk_faiss_index_path: str,
+        chunk_whoosh_index_path: str,
         use_ai_models: bool = True
     ):
         """初始化分块搜索服务
 
         Args:
-            faiss_index_path: 传统Faiss索引文件路径
-            whoosh_index_path: 传统Whoosh索引目录路径
             chunk_faiss_index_path: 分块Faiss索引文件路径
             chunk_whoosh_index_path: 分块Whoosh索引目录路径
             use_ai_models: 是否使用AI模型进行搜索增强
         """
         # 检查依赖库可用性（仅在初始化时检查一次，避免重复警告）
         _check_search_dependencies()
-        self.faiss_index_path = faiss_index_path
-        self.whoosh_index_path = whoosh_index_path
         self.use_ai_models = use_ai_models
-
-        # 设置分块索引路径（如果未提供，则使用默认路径）
-        if not chunk_faiss_index_path:
-            chunk_faiss_index_path = faiss_index_path.replace('.faiss', '_chunks.faiss')
-        if not chunk_whoosh_index_path:
-            # 分块Whoosh索引使用同一个目录，但使用不同的schema和文件结构
-            chunk_whoosh_index_path = whoosh_index_path  # 使用相同的whoosh目录
 
         self.chunk_faiss_index_path = chunk_faiss_index_path
         self.chunk_whoosh_index_path = chunk_whoosh_index_path
@@ -105,7 +92,6 @@ class ChunkSearchService:
         self.search_stats = {
             'total_searches': 0,
             'chunk_searches': 0,
-            'traditional_searches': 0,
             'hybrid_searches': 0,
             'avg_response_time': 0.0,
             'chunk_hit_rate': 0.0
@@ -115,14 +101,11 @@ class ChunkSearchService:
         self._load_indexes()
 
     def _load_indexes(self):
-        """加载搜索索引（传统索引 + 分块索引）"""
+        """加载搜索索引（分块索引）"""
         try:
             logger.info("开始加载搜索索引...")
 
-            # 1. 加载传统索引
-            self._load_traditional_indexes()
-
-            # 2. 加载分块索引
+            # 加载分块索引
             self._load_chunk_indexes()
 
             logger.info("搜索索引加载完成")
@@ -130,41 +113,11 @@ class ChunkSearchService:
         except Exception as e:
             logger.error(f"加载搜索索引失败: {e}")
             # 设置默认值
-            self.faiss_index = None
-            self.whoosh_index = None
             self.chunk_faiss_index = None
             self.chunk_whoosh_index = None
-            self.faiss_metadata = {}
             self.chunk_faiss_metadata = {}
 
-    def _load_traditional_indexes(self):
-        """加载传统索引"""
-        # 加载传统Faiss索引
-        if FAISS_AVAILABLE and os.path.exists(self.faiss_index_path):
-            self.faiss_index = faiss.read_index(self.faiss_index_path)
-            metadata_path = self.faiss_index_path.replace('.faiss', '_metadata.pkl')
-            if os.path.exists(metadata_path):
-                with open(metadata_path, 'rb') as f:
-                    self.faiss_metadata = pickle.load(f)
-                logger.info(f"传统Faiss索引加载成功，文档数: {self.faiss_index.ntotal}")
-            else:
-                self.faiss_metadata = {}
-                logger.warning("传统Faiss元数据文件不存在")
-        else:
-            self.faiss_index = None
-            self.faiss_metadata = {}
-
-        # 加载传统Whoosh索引
-        if WHOOSH_AVAILABLE and os.path.exists(self.whoosh_index_path):
-            try:
-                self.whoosh_index = index.open_dir(self.whoosh_index_path)
-                logger.info("传统Whoosh索引加载成功")
-            except Exception as e:
-                logger.warning(f"传统Whoosh索引加载失败: {e}")
-                self.whoosh_index = None
-        else:
-            self.whoosh_index = None
-
+  
     def _load_chunk_indexes(self):
         """加载分块索引"""
         # 加载分块Faiss索引
@@ -220,9 +173,17 @@ class ChunkSearchService:
         try:
             logger.info(f"开始透明搜索: query='{query}', type={get_enum_value(search_type)}")
 
+            # 调试信息
+            should_use_chunk = self._should_use_chunk_search()
+            logger.info(f"是否使用分块搜索: {should_use_chunk}")
+            logger.info(f"chunk_faiss_index存在: {self.chunk_faiss_index is not None}")
+            logger.info(f"chunk_whoosh_index存在: {self.chunk_whoosh_index is not None}")
+
             # 直接使用分块搜索
-            if self._should_use_chunk_search():
+            if should_use_chunk:
+                logger.info("执行分块搜索...")
                 final_results = await self._chunk_search(query, search_type, limit, threshold, filters)
+                logger.info(f"分块搜索完成，结果数量: {len(final_results)}")
                 self.search_stats['chunk_searches'] += 1
             else:
                 logger.error("分块搜索服务不可用")
@@ -391,126 +352,9 @@ class ChunkSearchService:
             logger.error(f"分块全文搜索失败: {e}")
             return []
 
-    async def _traditional_search(
-        self,
-        query: str,
-        search_type: SearchType,
-        limit: int,
-        offset: int,
-        threshold: float,
-        filters: Optional[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """执行传统搜索（回退方案）"""
-        try:
-            # 这里可以调用现有的SearchService，但为了避免循环依赖，我们实现简化版本
-            results = []
-
-            # 1. 传统语义搜索
-            if is_semantic_search(search_type) or is_hybrid_search(search_type):
-                if self.faiss_index and AI_MODEL_SERVICE_AVAILABLE:
-                    semantic_results = await self._traditional_semantic_search(query, limit, threshold)
-                    results.extend(semantic_results)
-
-            # 2. 传统全文搜索
-            if is_fulltext_search(search_type) or is_hybrid_search(search_type):
-                if self.whoosh_index:
-                    fulltext_results = await self._traditional_fulltext_search(query, limit, offset)
-                    results.extend(fulltext_results)
-
-            # 3. 去重并排序
-            unique_results = self._deduplicate_results(results)
-            unique_results.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-
-            return unique_results[:limit]
-
-        except Exception as e:
-            logger.error(f"传统搜索失败: {e}")
-            return []
-
-    async def _traditional_semantic_search(self, query: str, limit: int, threshold: float) -> List[Dict[str, Any]]:
-        """传统语义搜索"""
-        try:
-            query_embedding = await ai_model_service.text_embedding(
-                query,
-                normalize_embeddings=True
-            )
-
-            import numpy as np
-            query_vector = np.array([query_embedding], dtype=np.float32)
-
-            k = min(limit, self.faiss_index.ntotal)
-            distances, indices = self.faiss_index.search(query_vector, k)
-
-            results = []
-            doc_ids = self.faiss_metadata.get('doc_ids', [])
-
-            for i, idx in enumerate(indices[0]):
-                if idx >= 0 and idx < len(doc_ids):
-                    similarity = float(distances[0][i])
-                    if similarity >= threshold:
-                        doc_id = doc_ids[idx]
-                        doc_info = self._get_document_info(doc_id)
-                        if doc_info:
-                            doc_info['relevance_score'] = min(similarity, 1.0)
-                            doc_info['match_type'] = 'semantic'
-                            results.append(doc_info)
-
-            return results
-
-        except Exception as e:
-            logger.error(f"传统语义搜索失败: {e}")
-            return []
-
-    async def _traditional_fulltext_search(self, query: str, limit: int, offset: int) -> List[Dict[str, Any]]:
-        """传统全文搜索"""
-        try:
-            from whoosh import index as whoosh_index
-            from whoosh.query import Term, Or
-
-            ix = whoosh_index.open_dir(self.whoosh_index_path)
-            searcher = ix.searcher()
-
-            try:
-                terms = []
-                query_terms = query.strip().split()
-
-                for term in query_terms:
-                    for field_name in ["title", "content", "file_name"]:
-                        if term.strip():
-                            terms.append(Term(field_name, term.strip()))
-
-                if not terms:
-                    return []
-
-                query_obj = Or(terms) if len(terms) > 1 else terms[0]
-                search_results = searcher.search(query_obj, limit=limit + offset)
-                hits = [hit for hit in search_results]
-
-                results = []
-                for i, hit in enumerate(hits):
-                    if i >= offset and len(results) < limit:
-                        doc_info = {
-                            'id': str(hit.get('id', '')),
-                            'title': str(hit.get('title', '')),
-                            'file_path': str(hit.get('file_path', '')),
-                            'file_name': str(hit.get('file_name', '')),
-                            'file_type': str(hit.get('file_type', '')),
-                            'content': str(hit.get('content', '')),
-                            'preview_text': str(hit.get('content', ''))[:200],
-                            'relevance_score': min(float(hit.score or 0.0), 1.0),
-                            'match_type': 'fulltext'
-                        }
-                        results.append(doc_info)
-
-                return results
-
-            finally:
-                searcher.close()
-
-        except Exception as e:
-            logger.error(f"传统全文搜索失败: {e}")
-            return []
-
+    
+    
+    
     def _merge_chunk_search_results(self, semantic_results: List[Dict], fulltext_results: List[Dict]) -> List[Dict]:
         """合并分块搜索结果"""
         # 使用分块ID去重
@@ -558,32 +402,7 @@ class ChunkSearchService:
                 best_chunks.append(best_chunk)
         return best_chunks
 
-    def _merge_chunk_and_traditional_results(self, chunk_results: List[Dict], traditional_results: List[Dict], limit: int) -> List[Dict]:
-        """合并分块搜索结果和传统搜索结果"""
-        # 按文件ID去重，优先使用分块结果
-        seen_file_ids = set()
-        merged = []
-
-        # 添加分块结果（优先级更高）
-        for chunk_result in chunk_results:
-            file_id = chunk_result.get('file_id')
-            if file_id and file_id not in seen_file_ids:
-                seen_file_ids.add(file_id)
-                # 转换分块结果为标准格式
-                standard_result = self._convert_chunk_to_standard_format(chunk_result)
-                merged.append(standard_result)
-
-        # 添加传统搜索结果（仅当没有对应的分块结果时）
-        for traditional_result in traditional_results:
-            file_id = traditional_result.get('id')  # 传统结果使用id作为文件标识
-            if file_id and file_id not in seen_file_ids:
-                seen_file_ids.add(file_id)
-                merged.append(traditional_result)
-
-        # 排序并限制数量
-        merged.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-        return merged[:limit]
-
+    
     def _convert_chunk_to_standard_format(self, chunk_result: Dict[str, Any]) -> Dict[str, Any]:
         """将分块结果转换为标准格式（保持API兼容性）"""
         return {
@@ -663,37 +482,7 @@ class ChunkSearchService:
             logger.error(f"获取分块信息失败 {chunk_id}: {e}")
             return None
 
-    def _get_document_info(self, doc_id: str) -> Optional[Dict[str, Any]]:
-        """根据文档ID获取文档信息"""
-        try:
-            from app.core.database import SessionLocal
-            from app.models.file import FileModel
-
-            db = SessionLocal()
-            try:
-                file = db.query(FileModel).filter(FileModel.id == int(doc_id)).first()
-                if not file:
-                    return None
-
-                return {
-                    'id': str(file.id),
-                    'title': file.file_name,
-                    'file_path': file.file_path,
-                    'file_name': file.file_name,
-                    'file_type': file.file_type,
-                    'file_size': file.file_size,
-                    'modified_time': file.modified_at.isoformat() if file.modified_at else '',
-                    'content': '',  # 传统索引不存储完整内容
-                    'preview_text': ''
-                }
-
-            finally:
-                db.close()
-
-        except Exception as e:
-            logger.error(f"获取文档信息失败 {doc_id}: {e}")
-            return None
-
+    
     def _update_search_stats(self, response_time: float, used_chunk_search: bool):
         """更新搜索统计信息"""
         self.search_stats['total_searches'] += 1
@@ -761,8 +550,6 @@ class ChunkSearchService:
     def is_ready(self) -> bool:
         """检查搜索服务是否就绪"""
         return (
-            self.faiss_index is not None or
-            self.whoosh_index is not None or
             self.chunk_faiss_index is not None or
             self.chunk_whoosh_index is not None
         )
@@ -770,23 +557,14 @@ class ChunkSearchService:
     def get_index_info(self) -> Dict[str, Any]:
         """获取索引信息"""
         info = {
-            'traditional_faiss_available': self.faiss_index is not None,
-            'traditional_whoosh_available': self.whoosh_index is not None,
             'chunk_faiss_available': self.chunk_faiss_index is not None,
             'chunk_whoosh_available': self.chunk_whoosh_index is not None,
             'ai_models_enabled': self.use_ai_models,
             'chunk_search_enabled': self._should_use_chunk_search()
         }
 
-        if self.faiss_index:
-            info['traditional_faiss_doc_count'] = self.faiss_index.ntotal
-
         if self.chunk_faiss_index:
             info['chunk_faiss_doc_count'] = self.chunk_faiss_index.ntotal
-
-        if self.whoosh_index:
-            with self.whoosh_index.searcher() as searcher:
-                info['traditional_whoosh_doc_count'] = searcher.doc_count()
 
         if self.chunk_whoosh_index:
             with self.chunk_whoosh_index.searcher() as searcher:
@@ -808,13 +586,12 @@ def get_chunk_search_service() -> ChunkSearchService:
     global _chunk_search_service
     if _chunk_search_service is None:
         # 使用默认路径创建服务实例
-        data_root = os.getenv('DATA_ROOT', '../data')
-        faiss_path = os.path.join(data_root, 'indexes/faiss/document_index.faiss')
-        whoosh_path = os.path.join(data_root, 'indexes/whoosh')
+        chunk_faiss_path = os.getenv('FAISS_INDEX_PATH', '../data/indexes/faiss').replace('.faiss', '_chunks.faiss')
+        chunk_whoosh_path = os.getenv('WHOOSH_INDEX_PATH', '../data/indexes/whoosh')
 
         _chunk_search_service = ChunkSearchService(
-            faiss_index_path=faiss_path,
-            whoosh_index_path=whoosh_path,
+            chunk_faiss_index_path=chunk_faiss_path,
+            chunk_whoosh_index_path=chunk_whoosh_path,
             use_ai_models=True
         )
 

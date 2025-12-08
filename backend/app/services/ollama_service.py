@@ -50,22 +50,7 @@ class OllamaLLMService(BaseAIModel):
             "repeat_penalty": 1.1,
             "num_predict": 2048,
             "num_ctx": 2048,
-            "seed": None,
-            "use_cloud_fallback": True,
-            "cloud_provider": "aliyun",
-            "cloud_config": {
-                "aliyun": {
-                    "model": "qwen-plus",
-                    "api_key": os.getenv("ALIYUN_ACCESS_KEY_ID"),
-                    "api_secret": os.getenv("ALIYUN_ACCESS_KEY_SECRET"),
-                    "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1"
-                },
-                "openai": {
-                    "model": "gpt-3.5-turbo",
-                    "api_key": os.getenv("OPENAI_API_KEY"),
-                    "endpoint": "https://api.openai.com/v1"
-                }
-            }
+            "seed": None
         }
 
         if config:
