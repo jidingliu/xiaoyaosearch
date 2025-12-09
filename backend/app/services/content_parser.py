@@ -1437,6 +1437,29 @@ class ContentParser:
                     confidence = 0.6  # 只有基本信息，置信度较低
                     ocr_success = False
 
+                # 新增：使用CLIP模型进行图像理解（确保与搜索时一致）
+                try:
+                    from app.services.ai_model_manager import ai_model_service
+                    from app.config.image_prompts import get_image_prompts
+
+                    # 调用CLIP模型进行图像理解
+                    clip_result = await ai_model_service.image_understanding(
+                        image_input=str(path),
+                        texts=get_image_prompts()
+                    )
+
+                    image_understanding = clip_result.get('content', '').strip()
+                    if image_understanding:
+                        description_parts.append(f"图像描述：{image_understanding}")
+                        # CLIP成功，提升置信度
+                        confidence = max(confidence, 0.8)
+                        logger.info(f"图片 {path.name} CLIP图像理解成功：{image_understanding}")
+                    else:
+                        logger.warning(f"图片 {path.name} CLIP图像理解返回空内容")
+
+                except Exception as clip_error:
+                    logger.warning(f"图片 {path.name} CLIP图像理解失败，继续使用OCR结果: {str(clip_error)}")
+
                 # 组合描述文本
                 image_description = " | ".join(description_parts)
 

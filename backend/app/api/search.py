@@ -230,12 +230,9 @@ async def multimodal_search(
         elif is_image_input(input_type):
             # 图像理解生成搜索查询
             logger.info("使用CN-CLIP进行图像理解")
-            texts = [
-                "描述这张图片的内容",
-                "这张图片展示了什么",
-                "图片中的主要元素",
-                "图片的整体主题"
-            ]
+            # 使用标准图像理解提示词（确保与索引构建一致）
+            from app.config.image_prompts import get_image_prompts
+            texts = get_image_prompts()
             vision_result = await ai_model_service.image_understanding(
                 file_content,
                 texts
