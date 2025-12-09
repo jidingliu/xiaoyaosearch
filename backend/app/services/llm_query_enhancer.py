@@ -8,6 +8,7 @@ import re
 from typing import Dict, Optional
 
 from app.services.ai_model_manager import ai_model_service
+from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
