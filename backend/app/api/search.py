@@ -79,6 +79,7 @@ async def search_files(
             try:
                 # 使用LLM增强查询
                 enhancement_result = await query_enhancer.enhance_query(request.query)
+                logger.info(f"增强结果： {enhancement_result} ")
                 if enhancement_result.get('success', False) and enhancement_result.get('enhanced', False):
                     # 根据搜索类型选择最佳查询
                     if is_semantic_search(request.search_type):
@@ -93,7 +94,7 @@ async def search_files(
             except Exception as e:
                 logger.warning(f"LLM查询增强失败，使用原始查询: {str(e)}")
                 enhanced_query = request.query
-
+                
         # 执行分块搜索
         search_result_data = await search_service.search(
             query=enhanced_query,

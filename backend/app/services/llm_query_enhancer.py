@@ -52,18 +52,17 @@ class LLMQueryEnhancer:
             prompt = self._build_simple_prompt(query)
 
             # 调用LLM
-            response = await ai_model_service.chat_with_ollama(
-                prompt=prompt,
-                model_name=self.model_name,
+            response = await ai_model_service.text_generation(
+                messages=prompt,
                 temperature=0.3,
                 max_tokens=150
             )
 
-            if not response or not response.get('success'):
+            if not response or not response.get('content'):
                 return self._create_fallback_response(query)
 
             # 解析响应
-            enhanced_content = response.get('content', '')
+            enhanced_content = response.get('content', '').strip()
             result = self._parse_simple_response(enhanced_content, query)
 
             logger.info(f"查询增强完成: '{query}' -> '{result['expanded_query']}'")
