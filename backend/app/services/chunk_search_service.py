@@ -7,9 +7,8 @@ import pickle
 import time
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-import logging
 
-from app.core.logging_config import get_logger
+from app.core.logging_config import get_logger, logger
 from app.utils.enum_helpers import get_enum_value, is_semantic_search, is_fulltext_search, is_hybrid_search
 from app.schemas.enums import SearchType
 from app.services.chunk_service import get_chunk_service, ChunkService
@@ -19,8 +18,6 @@ from whoosh import index, qparser
 from whoosh.filedb.filestore import FileStorage
 from whoosh.query import Query
 from app.services.ai_model_manager import ai_model_service
-
-logger = get_logger(__name__)
 
 
 class ChunkSearchService:
@@ -729,6 +726,131 @@ class ChunkSearchService:
                 info['chunk_whoosh_doc_count'] = searcher.doc_count()
 
         return info
+
+    async def vector_search(
+        self,
+        query_vector: Any,
+        limit: int = 20,
+        threshold: float = 0.7,
+        search_type: str = "image_vector"
+    ) -> Dict[str, Any]:
+        """执行向量搜索（用于图像搜索）
+
+        Args:
+            query_vector: 查询向量（图像特征向量）
+            limit: 返回结果数量
+            threshold: 相似度阈值
+            search_type: 搜索类型标识
+
+        Returns:
+            Dict[str, Any]: 搜索结果
+        """
+        start_time = time.time()
+
+        try:
+            logger.info(f"开始向量搜索: type={search_type}")
+
+            # 检查索引是否可用
+            if self.chunk_faiss_index is None:
+                logger.warning("分块Faiss索引未加载，无法进行向量搜索")
+                return self._format_error_response("", SearchType.SEMANTIC, "Faiss索引未加载")
+
+            if self.chunk_faiss_index.ntotal == 0:
+                logger.warning("分块Faiss索引为空，无法进行向量搜索")
+                return self._format_error_response("", SearchType.SEMANTIC, "Faiss索引为空")
+
+            # 准备查询向量
+            import numpy as np
+            query_vector = np.array(query_vector, dtype=np.float32)
+            logger.debug(f"查询向量形状: {query_vector.shape}")
+
+            # 确保查询向量是二维的 (1, d)
+            if len(query_vector.shape) == 1:
+                query_vector = query_vector.reshape(1, -1)
+            else:
+                query_vector = query_vector
+
+            logger.debug(f"查询向量最终形状: {query_vector.shape}")
+            logger.debug(f"Faiss索引维度: {self.chunk_faiss_index.d}")
+
+            # 检查向量维度是否匹配
+            if query_vector.shape[1] != self.chunk_faiss_index.d:
+                logger.error(f"向量维度不匹配: 查询向量={query_vector.shape[1]}, 索引={self.chunk_faiss_index.d}")
+                return self._format_error_response("", SearchType.SEMANTIC, f"向量维度不匹配: {query_vector.shape[1]} != {self.chunk_faiss_index.d}")
+
+            # 执行向量搜索
+            k = min(limit * 3, self.chunk_faiss_index.ntotal)  # 搜索3倍的结果用于筛选
+            distances, indices = self.chunk_faiss_index.search(query_vector, k)
+
+            # 检查返回值的形状
+            if distances is None or indices is None:
+                logger.error("Faiss搜索返回空值")
+                return self._format_error_response("", SearchType.SEMANTIC, "Faiss搜索返回空值")
+
+            # 处理搜索结果
+            results = []
+            if len(distances) > 0 and len(indices) > 0:
+                for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
+                    if idx >= 0:  # 有效的索引
+                        try:
+                            # 获取分块信息
+                            chunk_info = self.chunk_id_to_info.get(int(idx), {})
+                            if not chunk_info:
+                                logger.warning(f"未找到分块信息: {idx}")
+                                continue
+
+                            # 计算相似度分数（将距离转换为相似度）
+                            similarity = float(1.0 / (1.0 + distance))
+
+                            # 应用阈值过滤
+                            if similarity < threshold:
+                                continue
+
+                            # 构建结果项
+                            result_item = {
+                                'file_id': chunk_info.get('file_id', 0),
+                                'file_name': chunk_info.get('file_name', ''),
+                                'file_path': chunk_info.get('file_path', ''),
+                                'file_type': chunk_info.get('file_type', ''),
+                                'chunk_id': chunk_info.get('chunk_id', 0),
+                                'chunk_index': chunk_info.get('chunk_index', 0),
+                                'chunk_text': chunk_info.get('chunk_text', ''),
+                                'relevance_score': similarity,
+                                'preview_text': chunk_info.get('chunk_text', '')[:200] + '...' if len(chunk_info.get('chunk_text', '')) > 200 else chunk_info.get('chunk_text', ''),
+                                'highlight': '',  # 向量搜索没有高亮
+                                'created_at': chunk_info.get('created_at', ''),
+                                'modified_at': chunk_info.get('modified_at', ''),
+                                'file_size': chunk_info.get('file_size', 0),
+                                'match_type': search_type,
+                                'distance': float(distance)
+                            }
+                            results.append(result_item)
+
+                            # 限制结果数量
+                            if len(results) >= limit:
+                                break
+
+                        except Exception as e:
+                            logger.warning(f"处理搜索结果时出错 (idx={idx}): {str(e)}")
+                            continue
+
+            # 按相似度排序
+            results.sort(key=lambda x: x['relevance_score'], reverse=True)
+
+            # 计算响应时间
+            response_time = time.time() - start_time
+
+            # 更新统计信息
+            self._update_search_stats(response_time, True)
+
+            logger.info(f"向量搜索完成: 找到{len(results)}个结果, 耗时={response_time:.3f}秒")
+
+            # 返回兼容格式的结果
+            return self._format_compatible_response(results, "", response_time, SearchType.SEMANTIC)
+
+        except Exception as e:
+            logger.error(f"向量搜索失败: {str(e)}")
+            return self._format_error_response("", SearchType.SEMANTIC, str(e))
 
     def get_search_stats(self) -> Dict[str, Any]:
         """获取搜索统计信息"""

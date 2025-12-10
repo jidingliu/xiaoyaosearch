@@ -20,6 +20,7 @@ from app.utils.enum_helpers import get_enum_value, is_semantic_search, is_hybrid
 from app.services.chunk_search_service import get_chunk_search_service
 from app.services.ai_model_manager import ai_model_service
 from app.services.llm_query_enhancer import get_llm_query_enhancer
+from app.services.image_search_service import get_image_search_service
 
 router = APIRouter(prefix="/api/search", tags=["搜索服务"])
 logger = get_logger(__name__)
@@ -228,18 +229,71 @@ async def multimodal_search(
             ai_models_used.append("FasterWhisper")
 
         elif is_image_input(input_type):
-            # 图像理解生成搜索查询
-            logger.info("使用CN-CLIP进行图像理解")
-            # 使用标准图像理解提示词（确保与索引构建一致）
-            from app.config.image_prompts import get_image_prompts
-            texts = get_image_prompts()
-            vision_result = await ai_model_service.image_understanding(
-                file_content,
-                texts
-            )
-            converted_text = vision_result.get("best_match", {}).get("text", "")
-            confidence = vision_result.get("best_match", {}).get("similarity", 0.0)
-            ai_models_used.append("CN-CLIP")
+            # 图像特征向量搜索
+            logger.info("使用CLIP特征向量进行图像搜索")
+
+            # 提取上传图片的特征向量
+            try:
+                image_embedding = await ai_model_service.encode_image(file_content)
+
+                if image_embedding is not None and len(image_embedding) > 0:
+                    # 使用专门的图像搜索服务
+                    image_search_service = get_image_search_service()
+
+                    # 执行CLIP图像向量搜索
+                    search_result = await image_search_service.search_similar_images(
+                        query_vector=image_embedding,
+                        limit=limit,
+                        threshold=threshold
+                    )
+
+                    if search_result.get('success', False):
+                        search_results = search_result.get('data', {})
+                        converted_text = f"图像向量搜索，找到{len(search_results.get('results', []))}个相似图片"
+                        confidence = 0.8  # 向量搜索的置信度
+                        ai_models_used.append("CN-CLIP")
+
+                        # 直接返回向量搜索结果，转换为SearchResult格式
+                        image_results = []
+                        for item in search_results.get('results', []):
+                            image_results.append(SearchResult(
+                                file_id=item.get('file_id', 0),
+                                file_name=item.get('file_name', ''),
+                                file_path=item.get('file_path', ''),
+                                file_type=item.get('file_type', ''),
+                                relevance_score=item.get('relevance_score', 0.0),
+                                preview_text=item.get('preview_text', ''),
+                                highlight=item.get('highlight', ''),
+                                created_at=item.get('created_at', ''),
+                                modified_at=item.get('modified_at', ''),
+                                file_size=item.get('file_size', 0),
+                                match_type=item.get('match_type', 'image_vector')
+                            ))
+
+                        return SearchResponse(
+                            data={
+                                "results": [result.dict() for result in image_results],
+                                "total": search_results.get('total', 0),
+                                "search_time": search_results.get('search_time', 0.1),
+                                "query_used": "图像向量搜索",
+                                "input_processed": True,
+                                "ai_models_used": ai_models_used
+                            },
+                            message="图像向量搜索完成"
+                        )
+                    else:
+                        logger.warning(f"图像搜索服务失败: {search_result.get('data', {}).get('error', '未知错误')}")
+                        converted_text = ""
+                        confidence = 0.0
+                else:
+                    logger.warning("图像特征向量提取失败")
+                    converted_text = ""
+                    confidence = 0.0
+
+            except Exception as e:
+                logger.error(f"图像向量搜索失败: {str(e)}")
+                converted_text = ""
+                confidence = 0.0
 
         # 如果成功转换，进行真实搜索
         search_results = []
