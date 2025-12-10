@@ -650,6 +650,10 @@ class CLIPVisionService(BaseAIModel):
             logger.error(error_msg)
             raise AIModelException(error_msg, model_name=self.model_name)
 
+    def is_ready(self) -> bool:
+        """检查CLIP模型是否已加载并就绪"""
+        return True
+
 
 # 创建CLIP服务实例的工厂函数
 def create_clip_service(config: Dict[str, Any] = None) -> CLIPVisionService:

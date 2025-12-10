@@ -238,7 +238,8 @@ async def multimodal_search(
 
                 if image_embedding is not None and len(image_embedding) > 0:
                     # 使用专门的图像搜索服务
-                    image_search_service = get_image_search_service()
+                    from app.services.image_search_service import ensure_image_search_service
+                    image_search_service = await ensure_image_search_service()
 
                     # 执行CLIP图像向量搜索
                     search_result = await image_search_service.search_similar_images(
@@ -246,6 +247,8 @@ async def multimodal_search(
                         limit=limit,
                         threshold=threshold
                     )
+
+                    logger.info(f"执行CLIP图像向量搜索结果 : {search_result}")
 
                     if search_result.get('success', False):
                         search_results = search_result.get('data', {})
@@ -256,18 +259,30 @@ async def multimodal_search(
                         # 直接返回向量搜索结果，转换为SearchResult格式
                         image_results = []
                         for item in search_results.get('results', []):
+                            # 处理日期时间字段，如果为空则使用当前时间
+                            from datetime import datetime
+                            now = datetime.now()
+
+                            # 处理relevance_score - 使用相似度作为相关性分数，确保不超过1.0
+                            relevance_score = item.get('similarity', 0.0)
+                            if relevance_score == 0.0:
+                                relevance_score = item.get('relevance_score', 0.0)
+
+                            # 确保relevance_score在[0, 1]范围内，避免浮点数精度问题
+                            relevance_score = min(max(relevance_score, 0.0), 1.0)
+
                             image_results.append(SearchResult(
                                 file_id=item.get('file_id', 0),
                                 file_name=item.get('file_name', ''),
                                 file_path=item.get('file_path', ''),
                                 file_type=item.get('file_type', ''),
-                                relevance_score=item.get('relevance_score', 0.0),
-                                preview_text=item.get('preview_text', ''),
-                                highlight=item.get('highlight', ''),
-                                created_at=item.get('created_at', ''),
-                                modified_at=item.get('modified_at', ''),
+                                relevance_score=relevance_score,
+                                preview_text=f"相似度: {relevance_score:.3f}",
+                                highlight=f"图像匹配度: {relevance_score:.3f}",
+                                created_at=item.get('created_at', now),
+                                modified_at=item.get('modified_at', now),
                                 file_size=item.get('file_size', 0),
-                                match_type=item.get('match_type', 'image_vector')
+                                match_type='image_vector'
                             ))
 
                         return SearchResponse(

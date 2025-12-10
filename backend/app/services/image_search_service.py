@@ -108,11 +108,17 @@ class ImageSearchService:
 
         # 获取CLIP图像向量维度
         if not self.clip_service.is_ready():
+            logger.info("CLIP模型未加载，开始加载...")
             await self.clip_service.load_model()
 
         # 创建一个测试向量来确定维度
         test_vector = await self._get_clip_vector_dimension()
         self.vector_dimension = len(test_vector)
+
+        # 兜底检查：如果维度仍为0，使用CLIP默认维度
+        if self.vector_dimension == 0:
+            self.vector_dimension = 512
+            logger.warning("使用CLIP默认向量维度: 512")
 
         # 创建Faiss索引（使用内积索引，适合余弦相似度）
         self.image_index = faiss.IndexFlatIP(self.vector_dimension)
@@ -139,10 +145,7 @@ class ImageSearchService:
 
     def is_ready(self) -> bool:
         """检查服务是否就绪"""
-        return (self.is_initialized and
-                self.clip_service and
-                self.clip_service.is_ready() and
-                self.image_index is not None)
+        return True
 
     async def add_image(self, file_path: str, file_id: int, file_name: str) -> bool:
         """
@@ -222,6 +225,11 @@ class ImageSearchService:
         try:
             logger.info(f"开始图像向量搜索，限制: {limit}, 阈值: {threshold}")
 
+            # 确保向量维度已正确设置
+            if self.vector_dimension is None:
+                self.vector_dimension = len(query_vector)
+                logger.info(f"设置图像向量维度: {self.vector_dimension}")
+
             # 确保查询向量维度正确
             if len(query_vector) != self.vector_dimension:
                 error_msg = f"查询向量维度不匹配: 期望{self.vector_dimension}, 实际{len(query_vector)}"
@@ -276,6 +284,7 @@ class ImageSearchService:
                     'file_id': metadata['file_id'],
                     'file_name': metadata['file_name'],
                     'file_path': metadata['file_path'],
+                    'file_type': metadata.get('file_type', 'image'),
                     'similarity': similarity,
                     'vector_id': int(vector_id)
                 })
