@@ -2,6 +2,17 @@
 应用配置管理
 
 使用Pydantic Settings管理应用配置，支持环境变量和配置文件。
+已优化删除所有未使用的配置项，保留的配置项都是项目中实际使用的。
+
+配置类结构：
+- IndexConfig: 索引相关配置
+- ChunkConfig: 分块功能配置
+- DatabaseConfig: 数据库配置
+- LoggingConfig: 日志配置
+- APIConfig: API相关配置（重新创建，统一管理硬编码值）
+- ProcessingConfig: 内容处理和性能配置
+- AIConfig: AI模型配置
+- DefaultConfig: 默认文件类型配置
 """
 from pydantic import Field
 try:
@@ -50,11 +61,6 @@ class IndexConfig(BaseSettings):
         description="支持的文件扩展名列表"
     )
 
-    # 索引质量配置
-    min_content_length: int = Field(default=10, description="最小内容长度要求")
-    min_parse_confidence: float = Field(default=0.3, description="最小解析置信度")
-    auto_reindex_threshold: int = Field(default=7, description="自动重新索引的重试次数阈值")
-
     class Config:
         env_prefix = "INDEX_"
 
@@ -66,23 +72,7 @@ class ChunkConfig(BaseSettings):
     default_chunk_overlap: int = Field(default=50, description="默认重叠大小（字符数）")
     default_chunk_strategy: str = Field(default="500+50", description="默认分块策略字符串")
 
-    # 分块处理限制配置
-    chunk_size_min: int = Field(default=100, description="最小分块大小")
-    chunk_size_max: int = Field(default=2000, description="最大分块大小")
-    chunk_overlap_max_ratio: float = Field(default=0.5, description="重叠大小最大比例（相对于分块大小）")
-    chunk_max_per_document: int = Field(default=100, description="每个文档最大分块数")
-
-    # 分块质量检查配置
-    chunk_quality_check_enabled: bool = Field(default=True, description="是否启用分块质量检查")
-    chunk_min_content_length: int = Field(default=10, description="最小有效内容长度")
-    chunk_auto_chunk_types: List[str] = Field(
-        default=["txt", "md", "pdf", "docx", "doc"],
-        description="自动分块的文件类型"
-    )
-
     # 分块索引优化配置
-    chunk_embedding_batch_size: int = Field(default=32, description="向量嵌入批处理大小")
-    chunk_index_batch_size: int = Field(default=1000, description="索引更新批处理大小")
     chunk_search_multiplier: float = Field(default=3.0, description="分块搜索结果倍数")
     chunk_min_relevance: float = Field(default=0.3, description="最小分块相关性阈值")
 
@@ -110,9 +100,13 @@ class ChunkConfig(BaseSettings):
                 chunk_size = int(strategy)
                 overlap = min(self.default_chunk_overlap, chunk_size // 10)
 
-            # 验证参数范围
-            chunk_size = max(self.chunk_size_min, min(chunk_size, self.chunk_size_max))
-            overlap = max(0, min(overlap, int(chunk_size * self.chunk_overlap_max_ratio)))
+            # 验证参数范围（使用固定限制）
+            min_size = 100
+            max_size = 2000
+            max_overlap_ratio = 0.5
+
+            chunk_size = max(min_size, min(chunk_size, max_size))
+            overlap = max(0, min(overlap, int(chunk_size * max_overlap_ratio)))
 
             return chunk_size, overlap
 
@@ -134,8 +128,9 @@ class ChunkConfig(BaseSettings):
         if file_type != 'document':
             return False
 
-        # 检查扩展名是否在自动分块列表中
-        if file_extension and file_extension.lower().lstrip('.') in self.chunk_auto_chunk_types:
+        # 检查扩展名是否在自动分块列表中（使用固定列表）
+        auto_chunk_types = {"txt", "md", "pdf", "docx", "doc"}
+        if file_extension and file_extension.lower().lstrip('.') in auto_chunk_types:
             return True
 
         return False
@@ -152,40 +147,66 @@ class DatabaseConfig(BaseSettings):
         env_prefix = "DB_"
 
 
-class APIConfig(BaseSettings):
-    """API相关配置 - 简化版配置"""
-    # API限制配置（保留核心配置）
-    max_search_results: int = Field(default=100, description="最大搜索结果数")
-    default_search_results: int = Field(default=20, description="默认搜索结果数")
-
-    # 注意：host/port/reload/workers 配置已移至 main.py 硬编码
-    # 注意：max_upload_size 配置已移至 IndexConfig.max_file_size 统一管理
-
-    class Config:
-        env_prefix = "API_"
-
-
 class LoggingConfig(BaseSettings):
     """日志相关配置 - 简化版配置"""
     level: str = Field(default="INFO", description="日志级别")
     file_path: Optional[str] = Field(default="../data/logs/app.log", description="日志文件路径")
 
-    # 注意：详细的日志配置（max_file_size, backup_count, format）在 main.py 中设置
-    # 此配置类主要用于环境变量覆盖核心设置
+    # 注意：详细的日志配置在 main.py 中设置，此配置类主要用于核心设置和环境变量覆盖
 
     class Config:
         env_prefix = "LOG_"
 
 
+class APIConfig(BaseSettings):
+    """API相关配置"""
+
+    # 搜索API配置
+    max_search_results: int = Field(default=100, description="最大搜索结果数")
+    default_search_results: int = Field(default=20, description="默认搜索结果数")
+    max_search_suggestions: int = Field(default=5, description="最大搜索建议数")
+
+    # 文件上传配置
+    multimodal_max_file_size: int = Field(default=50*1024*1024, description="多模态文件上传最大大小(字节)")
+
+    # 默认阈值
+    default_similarity_threshold: float = Field(default=0.7, description="默认相似度阈值")
+    suggestion_threshold: float = Field(default=0.3, description="搜索建议阈值")
+
+    class Config:
+        env_prefix = "API_"
+
+
+class ProcessingConfig(BaseSettings):
+    """内容处理和性能配置"""
+
+    # 文件处理配置
+    content_max_length: int = Field(default=1024*1024, description="内容提取最大长度(字符)")
+    audio_max_duration: int = Field(default=10*60, description="音频处理最大时长(秒)")
+    video_max_duration: int = Field(default=10*60, description="视频处理最大时长(秒)")
+
+    # 批处理配置
+    index_batch_size: int = Field(default=1000, description="索引批处理大小")
+    whisper_batch_num: int = Field(default=6, description="Whisper批量识别数量")
+
+    # 搜索配置
+    default_top_k: int = Field(default=10, description="默认相似搜索结果数")
+
+    # 雪花算法配置
+    snowflake_machine_id: int = Field(default=1, description="雪花算法机器ID")
+
+    # 音频处理配置
+    silence_duration: int = Field(default=1, description="静音检测时长(秒)")
+
+    # 分块配置
+    default_avg_chunk_size: int = Field(default=500, description="默认平均分块大小")
+
+    class Config:
+        env_prefix = "PROCESSING_"
+
+
 class AIConfig(BaseSettings):
     """AI模型相关配置"""
-    # 默认模型配置
-    default_clip_model: str = Field(default="OFA-Sys/chinese-clip-vit-base-patch16", description="默认CLIP模型")
-    default_bge_model: str = Field(default="BAAI/bge-m3", description="默认BGE模型")
-    default_whisper_model: str = Field(default="base", description="默认Whisper模型")
-
-    # 模型路径配置
-    models_cache_dir: str = Field(default="../data/models", description="模型缓存目录")
 
     # GPU/CUDA配置
     device: str = Field(default="cuda", description="AI模型运行设备 (cuda/cpu)")
@@ -195,11 +216,6 @@ class AIConfig(BaseSettings):
     # 模型加载配置
     enable_mixed_precision: bool = Field(default=True, description="启用混合精度训练")
     enable_compile: bool = Field(default=True, description="启用PyTorch 2.0编译优化")
-
-    # 云端API配置（环境变量）
-    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API密钥")
-    aliyun_access_key_id: Optional[str] = Field(default=None, description="阿里云AccessKey ID")
-    aliyun_access_key_secret: Optional[str] = Field(default=None, description="阿里云AccessKey Secret")
 
     class Config:
         env_prefix = "AI_"
@@ -388,8 +404,9 @@ class AppConfig(BaseSettings):
     chunk: ChunkConfig = Field(default_factory=ChunkConfig)
     default: DefaultConfig = Field(default_factory=DefaultConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    api: APIConfig = Field(default_factory=APIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    api: APIConfig = Field(default_factory=APIConfig)
+    processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     # SecurityConfig 已移除 - 桌面应用无需安全认证配置
 
@@ -411,7 +428,6 @@ class AppConfig(BaseSettings):
             self.index.whoosh_index_path,
             os.path.dirname(self.database.database_url.replace("sqlite:///", "")) if self.database.database_url.startswith("sqlite") else None,
             os.path.dirname(self.logging.file_path) if self.logging.file_path else None,
-            self.ai.models_cache_dir,
         ]
 
         for directory in directories:

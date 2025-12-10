@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.config import get_settings
 from app.core.logging_config import get_logger
 from app.schemas.requests import SearchRequest, MultimodalRequest, SearchHistoryRequest
 from app.schemas.responses import (
@@ -24,6 +25,7 @@ from app.services.image_search_service import get_image_search_service
 
 router = APIRouter(prefix="/api/search", tags=["搜索服务"])
 logger = get_logger(__name__)
+settings = get_settings()
 
 
 @router.post("/", response_model=SearchResponse, summary="文本搜索")
@@ -178,8 +180,8 @@ async def multimodal_search(
     input_type: InputType = Form(...),
     file: UploadFile = File(...),
     search_type: SearchType = Form(SearchType.HYBRID),
-    limit: int = Form(20),
-    threshold: float = Form(0.7),
+    limit: int = Form(settings.api.default_search_results),
+    threshold: float = Form(settings.api.default_similarity_threshold),
     db: Session = Depends(get_db)
 ):
     """
@@ -201,13 +203,13 @@ async def multimodal_search(
 
     try:
         # 验证文件大小
-        max_size = 50 * 1024 * 1024  # 50MB
+        max_size = settings.api.multimodal_max_file_size
         file.file.seek(0, 2)  # 移动到文件末尾
         file_size = file.file.tell()
         file.file.seek(0)  # 重置文件指针
 
         if file_size > max_size:
-            raise HTTPException(status_code=400, detail="文件大小超过50MB限制")
+            raise HTTPException(status_code=400, detail=f"文件大小超过{max_size // (1024*1024)}MB限制")
 
         # 读取文件内容
         file_content = await file.read()
@@ -547,7 +549,7 @@ async def clear_search_history(
 @router.get("/suggestions", summary="搜索建议")
 async def get_search_suggestions(
     query: str,
-    limit: int = 5,
+    limit: int = settings.api.max_search_suggestions,
     db: Session = Depends(get_db)
 ):
     """

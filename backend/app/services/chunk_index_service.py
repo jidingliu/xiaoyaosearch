@@ -74,7 +74,7 @@ class ChunkIndexService:
             'total_chunks_created': 0,
             'chunked_documents': 0,
             'avg_chunks_per_document': 0.0,
-            'embedding_batch_size': settings.chunk.chunk_embedding_batch_size,
+            'embedding_batch_size': settings.processing.index_batch_size,
             'last_index_time': None
         }
 
