@@ -158,3 +158,77 @@ class FileListRequest(BaseModel):
 
     class Config:
         use_enum_values = True
+
+
+class CreateSettingRequest(BaseModel):
+    """创建设置请求模型"""
+    key: str = Field(..., description="设置键名", min_length=1, max_length=100)
+    value: Any = Field(..., description="设置值")
+    type: str = Field(default="string", description="值类型: string/integer/boolean/float/json")
+    description: Optional[str] = Field(default=None, description="设置说明")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "key": "max_search_results",
+                "value": 50,
+                "type": "integer",
+                "description": "最大搜索结果数"
+            }
+        }
+
+
+class UpdateSettingRequest(BaseModel):
+    """更新设置请求模型"""
+    value: Any = Field(..., description="新的设置值")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "value": 100
+            }
+        }
+
+
+class BatchCreateRequest(BaseModel):
+    """批量创建设置请求模型"""
+    settings: List[Dict[str, Any]] = Field(..., description="设置数据列表")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "settings": [
+                    {
+                        "key": "theme",
+                        "value": "dark",
+                        "type": "string",
+                        "description": "界面主题"
+                    },
+                    {
+                        "key": "auto_save",
+                        "value": True,
+                        "type": "boolean",
+                        "description": "自动保存"
+                    }
+                ]
+            }
+        }
+
+
+class ResetRequest(BaseModel):
+    """重置设置请求模型"""
+    default_settings: List[Dict[str, Any]] = Field(..., description="默认设置列表")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "default_settings": [
+                    {
+                        "setting_key": "max_search_results",
+                        "setting_value": "20",
+                        "setting_type": "integer",
+                        "description": "最大搜索结果数"
+                    }
+                ]
+            }
+        }

@@ -255,3 +255,23 @@ class SuccessResponse(BaseModel):
     success: bool = Field(True, description="请求是否成功")
     data: Optional[Dict[str, Any]] = Field(None, description="响应数据")
     message: str = Field("操作成功", description="响应消息")
+
+
+class SettingResponse(BaseModel):
+    """设置项响应模型"""
+    id: int
+    setting_key: str
+    setting_value: str
+    setting_type: str
+    description: Optional[str] = None
+    updated_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class MessageResponse(BaseModel):
+    """通用消息响应模型"""
+    success: bool = True
+    message: str
+    data: Optional[Dict[str, Any]] = None
