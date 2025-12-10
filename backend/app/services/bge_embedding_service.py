@@ -3,10 +3,17 @@ BGE-M3文本嵌入模型服务
 提供中文文本向量化功能
 """
 import asyncio
-import logging
 import os
 import time
 from typing import List, Dict, Any, Optional, Union
+
+# 配置日志环境变量，抑制C++库的日志警告
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # TensorFlow日志级别
+os.environ['GRPC_VERBOSITY'] = 'ERROR'    # gRPC日志级别
+os.environ['GLOG_minloglevel'] = '2'      # Google日志最小级别
+os.environ['GLOG_v'] = '0'               # Google日志详细程度
+os.environ['PYTHONWARNINGS'] = 'ignore'  # 忽略Python警告
+
 import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
@@ -14,8 +21,7 @@ from sentence_transformers import SentenceTransformer
 from app.services.ai_model_base import BaseAIModel, ModelType, ProviderType, ModelStatus, AIModelException
 from app.utils.enum_helpers import get_enum_value
 from app.core.config import get_settings
-
-logger = logging.getLogger(__name__)
+from app.core.logging_config import logger
 settings = get_settings()
 
 
@@ -42,8 +48,9 @@ class BGEEmbeddingService(BaseAIModel):
             "normalize_embeddings": True,
             "batch_size": 32,
             "pooling_strategy": "cls",
-            "use_sentence_transformers": True,
-            "cache_dir": None
+            "use_sentence_transformers": False,  # 默认使用Transformers而不是SentenceTransformers
+            "cache_dir": None,
+            "trust_remote_code": True
         }
 
         if config:
@@ -114,8 +121,18 @@ class BGEEmbeddingService(BaseAIModel):
         model_name = self.config["model_name"]
         cache_dir = self.config.get("cache_dir")
 
+        logger.info(f"BGE配置: use_sentence_transformers={self.config.get('use_sentence_transformers')}, model_name={model_name}, cache_dir={cache_dir}")
+
+        # 强制检查是否为本地路径
+        import os
+        if os.path.exists(model_name) or "xiaoyaosearch" in model_name:
+            logger.info(f"检测到本地模型路径，强制使用Transformers加载: {model_name}")
+            use_sentence_transformers = False
+        else:
+            use_sentence_transformers = self.config.get("use_sentence_transformers", True)
+
         # 根据配置选择加载方式
-        if self.config.get("use_sentence_transformers", True):
+        if use_sentence_transformers:
             logger.info("使用SentenceTransformers加载BGE-M3模型")
             self.sentence_transformer = SentenceTransformer(
                 model_name,

@@ -10,15 +10,13 @@ import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-import logging
 
 # 导入自定义服务
 from .file_scanner import FileScanner, FileInfo
 from .metadata_extractor import MetadataExtractor
 from .content_parser import ContentParser, ParsedContent
 from .chunk_index_service import get_chunk_index_service
-
-logger = logging.getLogger(__name__)
+from app.core.logging_config import logger
 
 
 class FileIndexService:

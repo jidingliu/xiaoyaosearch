@@ -3,12 +3,18 @@ AI模型管理服务
 统一管理和协调所有AI模型实例 - 修复版
 """
 import asyncio
-import logging
+import os
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 import numpy as np
 
-logger = logging.getLogger(__name__)
+# 在导入任何AI模型库之前，配置环境变量以抑制日志警告
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # TensorFlow日志级别
+os.environ['GRPC_VERBOSITY'] = 'ERROR'    # gRPC日志级别
+os.environ['GLOG_minloglevel'] = '2'      # Google日志最小级别
+os.environ['GLOG_v'] = '0'               # Google日志详细程度
+
+from app.core.logging_config import logger
 
 from app.services.ai_model_base import BaseAIModel, ModelType, ProviderType, ModelStatus, ModelManager, AIModelException
 from app.utils.enum_helpers import get_enum_value
@@ -19,8 +25,6 @@ from app.services.clip_service import create_clip_service
 from app.services.ollama_service import create_ollama_service
 from app.models.ai_model import AIModelModel
 from app.core.database import get_db, SessionLocal
-
-logger = logging.getLogger(__name__)
 
 
 class AIModelService:
@@ -103,7 +107,10 @@ class AIModelService:
                     "device": get_settings().ai.get_optimal_device(),
                     "embedding_dim": 1024,
                     "max_length": 8192,
-                    "normalize_embeddings": True
+                    "normalize_embeddings": True,
+                    "cache_dir": str(project_root / "data" / "models" / "embedding" / "BAAI" / "bge-m3"),
+                    "use_sentence_transformers": False,  # 使用本地Transformers而不是SentenceTransformers
+                    "trust_remote_code": True
                 }
             },
             "whisper_local": {
@@ -361,6 +368,22 @@ class AIModelService:
             raise AIModelException("图像理解模型不可用")
 
         return await model.predict(image_input, texts, **kwargs)
+
+    async def encode_image(self, image_input: Any) -> Any:
+        """
+        图像编码为特征向量
+
+        Args:
+            image_input: 图像输入
+
+        Returns:
+            Any: 图像特征向量
+        """
+        model = await self.get_model(ModelType.VISION)
+        if not model:
+            raise AIModelException("图像理解模型不可用")
+
+        return await model.encode_image(image_input)
 
     async def text_generation(self, messages: Union[str, List[Dict]], **kwargs) -> Dict[str, Any]:
         """

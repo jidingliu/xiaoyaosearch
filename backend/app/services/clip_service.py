@@ -663,3 +663,22 @@ def create_clip_service(config: Dict[str, Any] = None) -> CLIPVisionService:
         CLIPVisionService: CLIP服务实例
     """
     return CLIPVisionService(config or {})
+
+
+# 全局CLIP服务实例
+_clip_service = None
+
+
+def get_clip_service() -> CLIPVisionService:
+    """
+    获取CLIP图像理解服务实例（单例模式）
+
+    Returns:
+        CLIPVisionService: CLIP服务实例
+    """
+    global _clip_service
+
+    if _clip_service is None:
+        _clip_service = create_clip_service()
+
+    return _clip_service

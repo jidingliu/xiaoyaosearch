@@ -7,19 +7,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# 首先配置AI模型相关的日志设置（必须在导入AI相关库之前）
+from app.core.logging_config import setup_ai_logging
+setup_ai_logging()
+
 # 导入核心模块
-from app.core import setup_logging, init_database, setup_exception_handlers
-from app.core.logging_config import get_logger
+from app.core import init_database, setup_exception_handlers
+from app.core.logging_config import setup_logging, get_logger, logger
+
+# 配置日志系统
+setup_logging()
 from app.api import (
     search_router,
     index_router,
     config_router,
     system_router
 )
-
-# 配置日志系统
-setup_logging()
-logger = get_logger(__name__)
 
 
 @asynccontextmanager

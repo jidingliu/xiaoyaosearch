@@ -2,7 +2,7 @@
 分块索引服务
 
 扩展现有索引构建功能，支持分块级索引构建。
-提供透明的分块索引能力，保持与现有API完全兼容。
+提供透明的分块索引能力，���持与现有API完全兼容。
 """
 
 import os
@@ -10,11 +10,10 @@ import pickle
 import time
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import logging
 from pathlib import Path
 
 from app.utils.snowflake import generate_snowflake_id
-from app.core.logging_config import get_logger
+from app.core.logging_config import get_logger, logger
 from app.services.chunk_service import get_chunk_service, ChunkInfo
 import faiss
 import numpy as np
@@ -22,8 +21,6 @@ import whoosh
 from whoosh import index
 from whoosh import fields
 from app.services.ai_model_manager import ai_model_service
-
-logger = get_logger(__name__)
 
 class ChunkIndexService:
     """分块索引服务
@@ -96,6 +93,7 @@ class ChunkIndexService:
         """
         try:
             logger.info(f"开始构建分块索引，文档数量: {len(documents)}")
+            logger.info(f"AI模型配置状态: use_ai_models={self.use_ai_models}")
             start_time = datetime.now()
 
             # 1. 过滤出需要分块的文档
@@ -116,9 +114,19 @@ class ChunkIndexService:
                     return False
             else:
                 logger.info("没有需要分块的文档")
-                return True
 
-            # 3. 更新统计信息
+            # 3. 构建CLIP图像向量索引（处理所有文档）
+            if self.use_ai_models:
+                logger.info(f"AI模型已启用，开始构建CLIP图像向量索引，文档数量: {len(documents)}")
+                clip_success = await self._build_clip_image_index(documents)
+                if not clip_success:
+                    logger.warning("CLIP图像索引构建失败，但继续构建其他索引")
+                else:
+                    logger.info("CLIP图像索引构建成功")
+            else:
+                logger.warning(f"AI模型未启用，跳过CLIP图像索引构建。use_ai_models={self.use_ai_models}")
+
+            # 4. 更新统计信息
             self._update_index_stats(len(chunked_docs))
             self.index_stats['last_index_time'] = datetime.now()
 
@@ -196,7 +204,7 @@ class ChunkIndexService:
 
             # 3. 构建分块Faiss向量索引（使用雪花ID）
             if self.use_ai_models and all_chunks:
-                logger.info(f"开始构建分块Faiss���量索引，分���数量: {len(all_chunks)}")
+                logger.info(f"开始构建分块Faiss索引，数量: {len(all_chunks)}")
                 faiss_success = await self._build_chunk_faiss_index_with_ids(all_chunks, faiss_index_ids)
                 if not faiss_success:
                     logger.warning("分块Faiss索引构建失败，但继续构建其他索引")
@@ -210,7 +218,7 @@ class ChunkIndexService:
                 logger.info(f"开始构建分块Whoosh全文索引，分块数量: {len(all_chunks)}")
                 whoosh_success = await self._build_chunk_whoosh_index_with_ids(all_chunks, whoosh_doc_ids)
                 if not whoosh_success:
-                    logger.warning("分块Whoosh索引构建失败���但继续构建其他索引")
+                    logger.warning("分块Whoosh索引构建失败，但继续构建其他索引")
                     whoosh_doc_ids = []
             else:
                 logger.info("跳过分块Whoosh索引构建（条件不满足）")
@@ -1532,6 +1540,118 @@ class ChunkIndexService:
         except Exception as e:
             logger.error(f"从Whoosh索引删除失败: {e}")
             return 0
+
+    async def _build_clip_image_index(self, documents: List[Dict[str, Any]]) -> bool:
+        """构建CLIP图像向量索引
+
+        Args:
+            documents: 文档列表
+
+        Returns:
+            bool: 构建是否成功
+        """
+        try:
+            logger.info("开始构建CLIP图像向量索引")
+            logger.info(f"总文档数量: {len(documents)}")
+            start_time = time.time()
+
+            # 1. 筛选出图片文件
+            image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
+            image_files = []
+
+            for doc in documents:
+                file_type = doc.get('file_type', '').lower()
+                logger.debug(f"检查文档: {doc.get('file_name', 'unknown')}, 类型: {file_type}")
+                if file_type in image_extensions:
+                    logger.debug(f"添加图片文件: {doc.get('file_name', 'unknown')}")
+                    image_files.append(doc)
+
+            if not image_files:
+                logger.info("没有找到图片文件，跳过CLIP索引构建")
+                return True
+
+            logger.info(f"找到 {len(image_files)} 个图片文件")
+
+            # 2. 提取CLIP特征向量
+            image_vectors = []
+            image_metadata = {}
+
+            for i, file_record in enumerate(image_files):
+                try:
+                    file_path = file_record.get('file_path', '')
+                    if not file_path or not os.path.exists(file_path):
+                        logger.warning(f"图片文件不存在: {file_path}")
+                        continue
+
+                    # 使用AI模型服务提取CLIP特征向量
+                    clip_vector = await ai_model_service.encode_image(file_path)
+
+                    if clip_vector is not None and len(clip_vector) > 0:
+                        # 存储向量
+                        image_vectors.append(np.array(clip_vector, dtype=np.float32))
+
+                        # 存储元数据
+                        vector_id = len(image_vectors) - 1
+                        image_metadata[vector_id] = {
+                            'file_id': file_record.get('id', 0),
+                            'file_name': file_record.get('file_name', ''),
+                            'file_path': file_path,
+                            'file_type': file_record.get('file_type', ''),
+                            'file_size': file_record.get('file_size', 0),
+                            'created_at': file_record.get('created_at', datetime.now()).isoformat() if file_record.get('created_at') else '',
+                            'modified_at': file_record.get('modified_time', datetime.now()).isoformat() if file_record.get('modified_time') else ''
+                        }
+
+                        if (i + 1) % 10 == 0:
+                            logger.info(f"已处理 {i + 1}/{len(image_files)} 个图片文件")
+                    else:
+                        logger.warning(f"图片文件CLIP特征向量提取失败: {file_path}")
+
+                except Exception as e:
+                    logger.warning(f"处理图片文件失败 {file_record.get('file_path', 'unknown')}: {str(e)}")
+                    continue
+
+            if len(image_vectors) == 0:
+                logger.warning("没有成功提取任何CLIP图像向量，无法构建索引")
+                return False
+
+            # 3. 构建CLIP Faiss索引
+            logger.info(f"构建CLIP Faiss索引，向量数量: {len(image_vectors)}")
+
+            # 确保所有向量维度一致
+            vector_matrix = np.vstack(image_vectors).astype(np.float32)
+            vector_dim = vector_matrix.shape[1]
+
+            # 创建CLIP索引（使用内积索引，适合余弦相似度）
+            clip_index = faiss.IndexFlatIP(vector_dim)
+
+            # 添加向量到索引
+            clip_index.add(vector_matrix)
+
+            # 4. 保存CLIP索引文件
+            base_path = os.path.dirname(self.chunk_faiss_index_path)
+            clip_faiss_path = os.path.join(base_path, 'clip_image_index.faiss')
+            clip_metadata_path = os.path.join(base_path, 'clip_image_metadata.pkl')
+
+            # 确保目录存在
+            os.makedirs(base_path, exist_ok=True)
+
+            # 保存Faiss索引
+            faiss.write_index(clip_index, clip_faiss_path)
+
+            # 保存元数据
+            with open(clip_metadata_path, 'wb') as f:
+                pickle.dump(image_metadata, f)
+
+            build_time = time.time() - start_time
+            logger.info(f"CLIP图像向量索引构建完成: {len(image_vectors)} 个向量，维度: {vector_dim}，耗时: {build_time:.2f}秒")
+            return True
+
+        except Exception as e:
+            logger.error(f"构建CLIP图像索引失败: {str(e)}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            return False
 
     async def _update_faiss_metadata_chunk_ids(self, saved_chunk_ids: List[int]) -> None:
         """更新Faiss索引元数据中的chunk_ids为数据库真实ID

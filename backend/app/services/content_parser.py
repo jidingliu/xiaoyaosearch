@@ -4,11 +4,11 @@
 从各种文件格式中提取文本内容，支持文档、图片、音视频等多种格式。
 """
 
+from app.core.logging_config import logger
 import os
 import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 import asyncio
@@ -54,8 +54,6 @@ from openpyxl import load_workbook
 from pptx import Presentation
 
 
-logger = logging.getLogger(__name__)
-
 
 @dataclass
 class ParsedContent:
@@ -66,7 +64,6 @@ class ParsedContent:
     encoding: Optional[str] = None
     confidence: float = 0.0
     metadata: Optional[Dict[str, Any]] = None
-
 
 class ContentParser:
     """内容解析器
@@ -1426,6 +1423,9 @@ class ContentParser:
                 # 基本信息
                 description_parts.append(f"{extension.upper()}格式图片")
 
+                # 初始化元数据字典
+                metadata = {}
+
                 # 添加OCR识别的文字内容
                 if ocr_text.strip():
                     description_parts.append(f"文字内容：{ocr_text}")
@@ -1437,30 +1437,28 @@ class ContentParser:
                     confidence = 0.6  # 只有基本信息，置信度较低
                     ocr_success = False
 
-                # 新增：使用CLIP模型进行图像理解（确保与搜索时一致）
+                # 新增：使用CLIP模型提取图像特征向量（用于向量搜索）
                 try:
                     from app.services.ai_model_manager import ai_model_service
-                    from app.config.image_prompts import get_image_prompts
 
-                    # 调用CLIP模型进行图像理解
-                    clip_result = await ai_model_service.image_understanding(
-                        image_input=str(path),
-                        texts=get_image_prompts()
-                    )
+                    # 提取CLIP图像特征向量
+                    clip_embedding = await ai_model_service.encode_image(str(path))
 
-                    # CLIP返回的是best_match格式，不是content
-                    best_match = clip_result.get('best_match', {})
-                    image_understanding = best_match.get('text', '').strip()
-                    if image_understanding:
-                        description_parts.append(f"图像描述：{image_understanding}")
+                    # 将特征向量添加到元数据中，用于Faiss索引
+                    if clip_embedding is not None and len(clip_embedding) > 0:
+                        description_parts.append("图像特征已提取")
                         # CLIP成功，提升置信度
                         confidence = max(confidence, 0.8)
-                        logger.info(f"图片 {path.name} CLIP图像理解成功：{image_understanding}")
+                        logger.info(f"图片 {path.name} CLIP特征向量提取成功，维度: {len(clip_embedding)}")
+
+                        # 存储特征向量到元数据，供索引服务使用
+                        metadata["clip_embedding"] = clip_embedding.tolist()
+                        metadata["clip_embedded"] = True
                     else:
-                        logger.warning(f"图片 {path.name} CLIP图像理解返回空内容")
+                        logger.warning(f"图片 {path.name} CLIP特征向量提取失败")
 
                 except Exception as clip_error:
-                    logger.warning(f"图片 {path.name} CLIP图像理解失败，继续使用OCR结果: {str(clip_error)}")
+                    logger.warning(f"图片 {path.name} CLIP特征向量提取失败，继续使用OCR结果: {str(clip_error)}")
 
                 # 组合描述文本
                 image_description = " | ".join(description_parts)
@@ -1468,7 +1466,9 @@ class ContentParser:
                 # 提取图片元数据
                 with Image.open(path) as img:
                     width, height = img.size
-                    metadata = {
+
+                    # 基础元数据
+                    base_metadata = {
                         "format": "image",
                         "file_extension": extension,
                         "file_size": file_size,
@@ -1479,6 +1479,12 @@ class ContentParser:
                         "ocr_text_length": len(ocr_text.strip()),
                         "processed_at": datetime.now().isoformat()
                     }
+
+                    # 合并CLIP特征向量元数据（如果有）
+                    if metadata:
+                        metadata.update(base_metadata)
+                    else:
+                        metadata = base_metadata
 
                 logger.info(f"图片OCR处理完成: {path.name}, 文字长度: {len(ocr_text)}字符")
 
