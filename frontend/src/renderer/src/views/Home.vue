@@ -143,7 +143,7 @@
         </div>
 
         <!-- 搜索选项 -->
-        <div v-if="showSearchOptions" class="search-options">
+        <div v-if="showSearchOptions && inputMode === 'text'" class="search-options">
           <a-row :gutter="16">
             <a-col :span="8">
               <a-form-item label="搜索类型">
