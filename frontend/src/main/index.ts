@@ -13,7 +13,11 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      webSecurity: false, // 禁用Web安全策略，允许跨域请求
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false
     }
   })
 
@@ -24,6 +28,17 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // 设置会话以允许跨域请求
+  const session = mainWindow.webContents.session
+  session.webRequest.onBeforeSendHeaders((details, callback) => {
+    callback({
+      requestHeaders: {
+        ...details.requestHeaders,
+        'User-Agent': 'XiaoyaoSearch-Electron'
+      }
+    })
   })
 
   // HMR for renderer base on electron-vite cli.

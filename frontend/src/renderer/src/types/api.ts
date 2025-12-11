@@ -19,7 +19,8 @@ export enum FileType {
   VIDEO = 'video',
   AUDIO = 'audio',
   DOCUMENT = 'document',
-  IMAGE = 'image'
+  IMAGE = 'image',
+  OTHER = 'other'
 }
 
 // 搜索请求

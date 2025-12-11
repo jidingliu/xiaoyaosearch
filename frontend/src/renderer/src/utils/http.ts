@@ -1,19 +1,23 @@
 // HTTP 客户端工具
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { message } from 'ant-design-vue'
 
 // 创建 axios 实例
 const http: AxiosInstance = axios.create({
-  baseURL: 'http://127.0.0.1:8000', // 后端 API 地址
+  baseURL: 'http://127.0.0.1:8000', // 后端 API 地址，使用IPv4确保连接
   timeout: 30000, // 30秒超时
   headers: {
     'Content-Type': 'application/json',
   },
+  // Electron特殊配置
+  withCredentials: false,
+  // 禁用代理确保直连
+  proxy: false,
 })
 
 // 请求拦截器
 http.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     // 可以在这里添加认证 token 等
     // console.log('发送请求:', config)
     return config
@@ -71,6 +75,22 @@ http.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+// 测试网络连接
+export const testConnection = async (): Promise<boolean> => {
+  try {
+    console.log('测试网络连接到后端...')
+    const response = await axios.get('http://127.0.0.1:8000/', {
+      timeout: 5000,
+      proxy: false
+    })
+    console.log('网络连接测试成功:', response.status)
+    return true
+  } catch (error) {
+    console.error('网络连接测试失败:', error)
+    return false
+  }
+}
 
 // 封装常用的 HTTP 方法
 export const httpClient = {
