@@ -8,7 +8,7 @@ import os
 import hashlib
 import mimetypes
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, Union
 from datetime import datetime
 import logging
 from PyPDF2 import PdfReader
@@ -18,6 +18,10 @@ from pptx import Presentation
 from mutagen import File as MutagenFile
 from PIL import Image
 from PIL.ExifTags import TAGS
+
+# 导入统一配置
+from app.core.config import get_settings
+settings = get_settings()
 
 
 logger = logging.getLogger(__name__)
@@ -34,15 +38,7 @@ class MetadataExtractor:
 
     def __init__(self):
         """初始化元数据提取器"""
-        self.supported_formats = {
-            'document': ['.pdf', '.doc', '.docx', '.txt', '.md', '.rtf'],
-            'spreadsheet': ['.xls', '.xlsx', '.csv'],
-            'presentation': ['.ppt', '.pptx'],
-            'image': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg'],
-            'audio': ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'],
-            'video': ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'],
-            'archive': ['.zip', '.rar', '.7z', '.tar', '.gz']
-        }
+        pass
 
     def extract_metadata(self, file_input: Union[str, Any]) -> Dict[str, Any]:
         """提取文件元数据
@@ -377,10 +373,7 @@ class MetadataExtractor:
 
     def _get_file_type(self, extension: str) -> str:
         """根据扩展名获取文件类型"""
-        for file_type, extensions in self.supported_formats.items():
-            if extension in extensions:
-                return file_type
-        return 'unknown'
+        return settings.default.get_file_type(extension)
 
     def _calculate_file_hash(self, file_path: str) -> str:
         """计算文件哈希值"""
@@ -396,6 +389,4 @@ class MetadataExtractor:
             logger.error(f"计算文件哈希失败 {file_path}: {e}")
             return ""
 
-    def get_supported_formats(self) -> Dict[str, List[str]]:
-        """获取支持的文件格式"""
-        return self.supported_formats.copy()
+    

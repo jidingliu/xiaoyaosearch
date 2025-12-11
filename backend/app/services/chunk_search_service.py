@@ -194,13 +194,13 @@ class ChunkSearchService:
             chunk_semantic_results = []
             if is_semantic_search(search_type) or is_hybrid_search(search_type):
                 if self.chunk_faiss_index:
-                    chunk_semantic_results = await self._chunk_semantic_search(query, limit, threshold)
+                    chunk_semantic_results = await self._chunk_semantic_search(query, limit, threshold, filters)
 
             # 2. 分块级全文搜索
             chunk_fulltext_results = []
             if is_fulltext_search(search_type) or is_hybrid_search(search_type):
                 if self.chunk_whoosh_index:
-                    chunk_fulltext_results = await self._chunk_fulltext_search(query, limit)
+                    chunk_fulltext_results = await self._chunk_fulltext_search(query, limit, filters)
 
             # 3. 合并分块搜索结果
             if is_hybrid_search(search_type):
@@ -271,7 +271,7 @@ class ChunkSearchService:
         else:
             return 'other'
 
-    async def _chunk_semantic_search(self, query: str, limit: int, threshold: float) -> List[Dict[str, Any]]:
+    async def _chunk_semantic_search(self, query: str, limit: int, threshold: float, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """分块级语义搜索"""
         try:
             # 检查索引是否可用
@@ -343,6 +343,13 @@ class ChunkSearchService:
                         chunk_id = chunk_ids[idx]
                         chunk_info = self._get_chunk_info(chunk_id, query)
                         if chunk_info:
+                            # 应用文件类型过滤
+                            if filters and 'file_types' in filters and filters['file_types']:
+                                # 将文件类型映射到枚举值
+                                mapped_file_type = self._map_file_type_to_enum(chunk_info.get('file_type', ''))
+                                if mapped_file_type not in filters['file_types']:
+                                    continue  # 跳过不符合过滤条件的文件
+
                             chunk_info['relevance_score'] = min(similarity, 1.0)
                             chunk_info['match_type'] = 'semantic'
                             results.append(chunk_info)
@@ -355,7 +362,7 @@ class ChunkSearchService:
             logger.error(f"详细错误信息: {traceback.format_exc()}")
             return []
 
-    async def _chunk_fulltext_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
+    async def _chunk_fulltext_search(self, query: str, limit: int, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """分块级全文搜索"""
         try:
             from whoosh import index as whoosh_index
@@ -411,6 +418,16 @@ class ChunkSearchService:
                     if not content:
                         content = hit.get('content_stored', '')
 
+                    # 获取文件类型
+                    file_type = str(hit.get('file_type', ''))
+
+                    # 应用文件类型过滤
+                    if filters and 'file_types' in filters and filters['file_types']:
+                        # 将文件类型映射到枚举值
+                        mapped_file_type = self._map_file_type_to_enum(file_type)
+                        if mapped_file_type not in filters['file_types']:
+                            continue  # 跳过不符合过滤条件的文件
+
                     # 直接从索引获取完整信息
                     chunk_info = {
                         'id': str(hit.get('file_id', '')),
@@ -418,7 +435,7 @@ class ChunkSearchService:
                         'file_id': str(hit.get('file_id', '')),
                         'file_name': str(hit.get('file_name', '')),
                         'file_path': str(hit.get('file_path', '')),
-                        'file_type': str(hit.get('file_type', '')),
+                        'file_type': file_type,
                         'file_size': int(hit.get('file_size', 0)),
                         'content': content,
                         'chunk_index': int(hit.get('chunk_index', 0)),

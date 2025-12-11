@@ -311,7 +311,10 @@ class DefaultConfig(BaseSettings):
 
     def get_file_type(self, extension: str) -> str:
         """根据扩展名获取文件类型"""
-        return self.file_types.get(extension.lower(), "unknown")
+        file_type = self.file_types.get(extension.lower())
+        if file_type is None:
+            raise ValueError(f"不支持的文件类型: {extension}")
+        return file_type
 
     def get_format_display_name(self, extension: str) -> str:
         """获取格式友好显示名称"""

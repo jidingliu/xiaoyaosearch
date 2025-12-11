@@ -18,6 +18,10 @@ from .content_parser import ContentParser, ParsedContent
 from .chunk_index_service import get_chunk_index_service
 from app.core.logging_config import logger
 
+# 导入统一配置
+from app.core.config import get_settings
+settings = get_settings()
+
 
 class FileIndexService:
     """文件索引服务
@@ -494,21 +498,26 @@ class FileIndexService:
                         # 计算文件内容哈希
                         content_hash = self._calculate_file_hash(file_info.path)
 
-                        # 从mime_type推断文件类型
-                        file_type = 'unknown'
-                        if file_info.mime_type:
-                            if 'image' in file_info.mime_type:
-                                file_type = 'image'
-                            elif 'video' in file_info.mime_type:
-                                file_type = 'video'
-                            elif 'audio' in file_info.mime_type:
-                                file_type = 'audio'
-                            elif 'text' in file_info.mime_type:
-                                file_type = 'text'
-                            elif 'application/pdf' in file_info.mime_type:
-                                file_type = 'pdf'
-                            elif 'application/' in file_info.mime_type:
-                                file_type = 'document'
+                        # 使用统一配置获取文件类型
+                        try:
+                            file_type = settings.default.get_file_type(file_info.extension)
+                        except ValueError:
+                            # 如果扩展名不支持，尝试从mime_type推断
+                            file_type = 'unknown'
+                            if file_info.mime_type:
+                                if 'image' in file_info.mime_type:
+                                    file_type = 'image'
+                                elif 'video' in file_info.mime_type:
+                                    file_type = 'video'
+                                elif 'audio' in file_info.mime_type:
+                                    file_type = 'audio'
+                                elif 'application/pdf' in file_info.mime_type or 'application/' in file_info.mime_type or 'text' in file_info.mime_type:
+                                    file_type = 'document'
+
+                        # 跳过不支持的文件类型
+                        if file_type == 'unknown':
+                            logger.warning(f"跳过不支持的文件类型: {file_info.path} (扩展名: {file_info.extension}, MIME类型: {file_info.mime_type})")
+                            continue
 
                         # 创建或更新文件记录
                         file_record = FileModel(

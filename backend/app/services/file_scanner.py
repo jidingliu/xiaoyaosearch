@@ -15,28 +15,17 @@ from dataclasses import dataclass
 from datetime import datetime
 
 # 导入统一配置
-try:
-    from app.core.config import get_settings
-    settings = get_settings()
+from app.core.config import get_settings
+settings = get_settings()
 
-    def get_default_supported_extensions() -> Set[str]:
-        return settings.default.get_supported_extensions()
+def get_default_supported_extensions() -> Set[str]:
+    return settings.default.get_supported_extensions()
 
-    def is_default_mode() -> bool:
-        return settings.default.is_default_mode()
+def is_default_mode() -> bool:
+    return settings.default.is_default_mode()
 
-    def get_file_type(extension: str) -> str:
-        return settings.default.get_file_type(extension)
-except ImportError:
-    # 如果配置文件不存在，使用默认配置
-    def get_default_supported_extensions() -> Set[str]:
-        return set()
-
-    def is_default_mode() -> bool:
-        return True
-
-    def get_file_type(extension: str) -> str:
-        return 'unknown'
+def get_file_type(extension: str) -> str:
+    return settings.default.get_file_type(extension)
 
 logger = logging.getLogger(__name__)
 
