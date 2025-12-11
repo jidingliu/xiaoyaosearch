@@ -101,20 +101,20 @@
                 <ul>
                   <li><strong>文本搜索</strong>：直接在搜索框输入关键词，支持自然语言</li>
                   <li><strong>语音搜索</strong>：点击麦克风按钮，说出搜索内容（30秒内）</li>
-                  <li><strong>图片搜索</strong>：上传PNG/JPG图片，AI理解图片内容后搜索相关文件</li>
+                  <li><strong>图片搜索</strong>：上传PNG/JPG图片，AI理解图片内容后搜索相关图片</li>
                 </ul>
                 <h4>支持的文件类型：</h4>
                 <ul>
                   <li><strong>文档</strong>：txt, markdown, pdf, xls/xlsx, ppt/pptx, doc/docx</li>
                   <li><strong>音频</strong>：mp3, wav</li>
                   <li><strong>视频</strong>：mp4, avi</li>
-                  <li><strong>图片</strong>：png, jpg</li>
+                  <li><strong>图片</strong>：png, jpg, jpeg</li>
                 </ul>
-                <div class="tip-box">
-                  <BulbOutlined />
-                  <span>注意：当前版本仅支持一级目录索引，不会递归索引子文件夹</span>
-                </div>
               </div>
+              <div class="tip-box">
+                  <BulbOutlined />
+                  <span>注意：当前版本，图片搜索仅支持图搜图</span>
+                </div>
             </a-collapse-panel>
 
             <a-collapse-panel key="3" header="如何管理文件索引？">
