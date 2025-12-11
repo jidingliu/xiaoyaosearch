@@ -134,7 +134,9 @@ class FileModel(Base):
         elif extension in {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}:
             return "image"
         else:
-            return "other"
+            # 不再返回'other'，而是返回'document'作为默认类型
+            # 或者可以抛出异常，但为了兼容性暂时返回'document'
+            return "document"
 
     def update_index_status(self, status: str, error_message: str = None) -> None:
         """

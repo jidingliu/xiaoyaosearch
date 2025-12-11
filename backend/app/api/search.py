@@ -99,13 +99,18 @@ async def search_files(
                 enhanced_query = request.query
                 
         # 执行分块搜索
+        # 构建过滤器字典
+        filters = {}
+        if request.file_types:
+            filters['file_types'] = request.file_types
+
         search_result_data = await search_service.search(
             query=enhanced_query,
             search_type=request.search_type,  # 直接使用SearchType枚举
             limit=request.limit,
             offset=0,
             threshold=request.threshold,
-            filters=request.file_types
+            filters=filters
         )
 
         # 处理搜索结果数据格式
@@ -612,7 +617,7 @@ async def get_search_suggestions(
                     limit=limit,
                     offset=0,
                     threshold=0.3,  # 降低阈值获取更多建议
-                    filters=["document"]  # 主要从文档类型获取建议
+                    filters={'file_types': ['document']}  # 主要从文档类型获取建议
                 )
 
                 # 从搜索结果中提取可能的建议

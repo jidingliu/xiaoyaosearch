@@ -225,36 +225,41 @@ class ChunkSearchService:
         """将文件类型映射到枚举值
 
         Args:
-            file_type: 原始文件类型（如 'pdf', 'txt', 'docx'）
+            file_type: 原始文件类型（可能是扩展名如 'jpg' 或类型如 'image'）
 
         Returns:
             str: 映射后的枚举值
         """
         if not file_type:
-            return 'other'
+            logger.warning(f"文件类型为空，默认归类为document")
+            return 'document'
 
         file_type_lower = file_type.lower()
 
-        # 文档类型
+        # 如果已经是标准类型，直接返回
+        if file_type_lower in ['video', 'audio', 'document', 'image']:
+            return file_type_lower
+
+        # 文档类型（扩展名）
         document_types = {
             'pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
             'rtf', 'odt', 'ods', 'odp', 'md', 'markdown', 'tex', 'latex',
             'csv', 'json', 'xml', 'html', 'htm', 'epub', 'mobi', 'azw'
         }
 
-        # 视频类型
+        # 视频类型（扩展名）
         video_types = {
             'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp',
             'mpg', 'mpeg', 'ogv', 'ts', 'mts', 'm2ts', 'vob', 'f4v'
         }
 
-        # 音频类型
+        # 音频类型（扩展名）
         audio_types = {
             'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus',
             'aiff', 'au', 'ra', 'amr', 'ac3', 'dts', 'mka'
         }
 
-        # 图片类型
+        # 图片类型（扩展名）
         image_types = {
             'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp',
             'svg', 'ico', 'psd', 'ai', 'eps', 'raw', 'cr2', 'nef', 'arw'
@@ -269,7 +274,8 @@ class ChunkSearchService:
         elif file_type_lower in image_types:
             return 'image'
         else:
-            return 'other'
+            logger.warning(f"未知的文件类型 '{file_type}'，默认归类为document")
+            return 'document'
 
     async def _chunk_semantic_search(self, query: str, limit: int, threshold: float, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """分块级语义搜索"""
