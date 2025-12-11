@@ -292,20 +292,7 @@ export class SearchServiceMock {
       file_size: 834567,
       match_type: 'semantic'
     },
-    {
-      file_id: 18,
-      file_name: '配置文件.json',
-      file_path: 'test-dir\\其他\\配置文件.json',
-      file_type: FileType.OTHER,
-      relevance_score: 0.83,
-      preview_text: 'AI模型配置文件JSON格式，包含模型参数设置、数据处理配置和API接口定义等关键配置信息。',
-      highlight: '<em>AI</em>模型配置文件JSON格式，包含模型参数设置、数据处理配置和API接口定义等关键配置信息。',
-      created_at: '2023-12-21T18:30:00Z',
-      modified_at: '2023-12-21T18:30:00Z',
-      file_size: 125829,
-      match_type: 'fulltext'
-    }
-  ]
+    ]
 
   // 搜索建议库
   private static suggestionPool = [

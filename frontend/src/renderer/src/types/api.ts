@@ -16,11 +16,10 @@ export enum SearchType {
 
 // 文件类型枚举
 export enum FileType {
-  VIDEO = 'video',
-  AUDIO = 'audio',
-  DOCUMENT = 'document',
-  IMAGE = 'image',
-  OTHER = 'other'
+  VIDEO = 'video',      // 对应文件扩展名（mp4、avi）
+  AUDIO = 'audio',      // 对应文件扩展名（mp3、wav）
+  DOCUMENT = 'document',  // 对应文件扩展名（txt、md、doc/docx、xls/xlsx、ppt/pptx、pdf）
+  IMAGE = 'image',      // 对应文件扩展名（png、jpg、jpeg）
 }
 
 // 搜索请求
