@@ -304,17 +304,10 @@ async def multimodal_search(
                                 match_type='image_vector'
                             ))
 
-                        return SearchResponse(
-                            data={
-                                "results": [result.dict() for result in image_results],
-                                "total": search_results.get('total', 0),
-                                "search_time": search_results.get('search_time', 0.1),
-                                "query_used": "图像向量搜索",
-                                "input_processed": True,
-                                "ai_models_used": ai_models_used
-                            },
-                            message="图像向量搜索完成"
-                        )
+                        # 图像搜索成功，构建MultimodalResponse格式的数据
+                        converted_text = ""
+                        search_results = image_results  # 使用已经转换好的SearchResult列表
+                        confidence = 0.8  # 向量搜索的置信度
                     else:
                         logger.warning(f"图像搜索服务失败: {search_result.get('data', {}).get('error', '未知错误')}")
                         converted_text = ""
@@ -329,9 +322,14 @@ async def multimodal_search(
                 converted_text = ""
                 confidence = 0.0
 
-        # 如果成功转换，进行真实搜索
-        search_results = []
-        if converted_text:
+        # 根据输入类型决定搜索策略
+        # 初始化search_results，注意图像搜索可能已经在前面设置了该变量
+        if 'search_results' not in locals():
+            search_results = []
+
+        # 语音输入：需要进行文本搜索
+        # 图像输入：直接使用图像向量搜索结果，不需要文本搜索
+        if is_voice_input(input_type) and converted_text:
             # 获取搜索查询的嵌入向量
             if (is_semantic_search(search_type) or is_hybrid_search(search_type)):
                 await ai_model_service.text_embedding(converted_text, normalize_embeddings=True)
@@ -373,6 +371,10 @@ async def multimodal_search(
                     ))
             else:
                 logger.warning("搜索服务未就绪，无法进行搜索")
+
+        elif is_image_input(input_type):
+            # 图像搜索：直接使用已获得的图像向量搜索结果
+            logger.info(f"图像搜索完成，使用向量搜索结果: {len(search_results)}个结果")
         else:
             logger.warning("无法转换输入内容，跳过搜索")
 

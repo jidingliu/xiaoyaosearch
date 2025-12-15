@@ -210,6 +210,8 @@ class ChunkSearchService:
             else:
                 chunk_results = chunk_fulltext_results
 
+            logger.info(f"搜索结果统计: 语义={len(chunk_semantic_results)}, 全文={len(chunk_fulltext_results)}, 合并后={len(chunk_results)}")
+
             # 4. 按文件分组，选择最佳分块
             file_grouped_results = self._group_chunks_by_file(chunk_results)
             best_chunk_results = self._select_best_chunks(file_grouped_results)
@@ -507,28 +509,30 @@ class ChunkSearchService:
     def _group_chunks_by_file(self, chunk_results: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """按文件ID分组分块结果"""
         file_groups = {}
-        logger.debug(f"开始分组 {len(chunk_results)} 个分块结果")
+        logger.info(f"开始分组 {len(chunk_results)} 个分块结果")
         for chunk in chunk_results:
             file_id = chunk.get('file_id')
+            logger.info(f"处理分块: chunk_id={chunk.get('chunk_id')}, file_id={file_id}, file_name={chunk.get('file_name')}")
             if file_id:
                 if file_id not in file_groups:
                     file_groups[file_id] = []
                 file_groups[file_id].append(chunk)
             else:
                 logger.warning(f"发现没有file_id的分块: {chunk.get('chunk_id', 'unknown')}")
-        logger.debug(f"分组完成: {len(file_groups)} 个文件组")
+        logger.info(f"分组完成: {len(file_groups)} 个文件组")
         return file_groups
 
     def _select_best_chunks(self, file_groups: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """为每个文件选择最佳分块"""
         best_chunks = []
-        logger.debug(f"开始为 {len(file_groups)} 个文件组选择最佳分块")
+        logger.info(f"开始为 {len(file_groups)} 个文件组选择最佳分块")
         for file_id, chunks in file_groups.items():
+            logger.info(f"文件组 {file_id} 有 {len(chunks)} 个分块")
             if chunks:
                 # 选择相关性最高的分块
                 best_chunk = max(chunks, key=lambda x: x.get('relevance_score', 0))
                 best_chunks.append(best_chunk)
-                logger.debug(f"文件 {file_id} 选择了最佳分块: {best_chunk.get('chunk_id')}, score={best_chunk.get('relevance_score')}")
+                logger.info(f"文件 {file_id} 选择了最佳分块: {best_chunk.get('chunk_id')}, score={best_chunk.get('relevance_score')}")
         return best_chunks
 
     

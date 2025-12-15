@@ -183,7 +183,7 @@
         </div>
 
         <!-- 搜索按钮组 -->
-        <div class="search-actions">
+        <div class="search-actions" v-if="inputMode === 'text'">
           <a-button
             type="primary"
             size="large"
@@ -434,7 +434,7 @@ const recordedAudioFile = ref<File | null>(null)
 const uploadedImageFile = ref<File | null>(null)
 
 // 图片上传相关
-const handleImageUpload = (file: File) => {
+const handleImageUpload = async (file: File) => {
   // 验证文件类型
   const validTypes = ['image/jpeg', 'image/jpg', 'image/png']
   if (!validTypes.includes(file.type)) {
@@ -451,8 +451,10 @@ const handleImageUpload = (file: File) => {
   uploadedImageFile.value = file
   // 生成预览
   const reader = new FileReader()
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     uploadedImage.value = e.target?.result as string
+    // 图片上传完成后自动开始分析
+    await analyzeImage()
   }
   reader.readAsDataURL(file)
   return false // 阻止默认上传
@@ -477,9 +479,10 @@ const analyzeImage = async () => {
     )
 
     if (response.success) {
-      // 将图片分析结果转换为搜索查询
-      searchQuery.value = response.data.converted_text
-      inputMode.value = 'text'
+      // 图片搜索完成，保持在图片模式，不切换到文本模式
+      // 清空搜索查询以避免显示在文本输入框中
+      searchQuery.value = ''
+      // inputMode.value 保持为 'image'，不强制切换
 
       // 更新搜索结果
       searchResults.value = response.data.search_results || []
@@ -620,9 +623,10 @@ const processVoiceSearch = async (audioFile: File) => {
     message.destroy() // 关闭loading
 
     if (response.success) {
-      // 将语音转文字结果转换为搜索查询
+      // 语音搜索完成，保持在语音模式，不切换到文本模式
+      // 可以选择显示转换后的文本，但不强制切换模式
       searchQuery.value = response.data.converted_text
-      inputMode.value = 'text'
+      // inputMode.value 保持为 'voice'，不强制切换
 
       // 更新搜索结果
       searchResults.value = response.data.search_results || []
@@ -639,8 +643,9 @@ const processVoiceSearch = async (audioFile: File) => {
     message.error('语音转文字失败，请重试')
     console.error('Voice recognition error:', error)
 
-    // 如果语音识别失败，切换回文本模式
-    inputMode.value = 'text'
+    // 如果语音识别失败，可以选择保持在语音模式或切换到文本模式
+    // 这里选择保持语音模式，让用户可以重新录音
+    // inputMode.value = 'text'  // 注释掉强制切换
   } finally {
     isSearching.value = false
   }
