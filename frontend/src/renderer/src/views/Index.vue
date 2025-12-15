@@ -144,13 +144,6 @@
       width="600px"
       @ok="handleAddFolder"
     >
-      <a-alert
-        message="提示"
-        description="当前仅支持一级目录索引，不会递归索引子文件夹"
-        type="info"
-        show-icon
-        style="margin-bottom: 16px"
-      />
       <a-form layout="vertical">
         <a-form-item label="选择文件夹">
           <a-input
