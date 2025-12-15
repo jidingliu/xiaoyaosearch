@@ -172,10 +172,10 @@ onMounted(() => {
   // 立即获取一次系统状态
   fetchSystemStatus()
 
-  // 设置定时刷新（每5分钟更新一次）
+  // 设置定时刷新（每5秒更新一次）
   refreshTimer.value = setInterval(() => {
     fetchSystemStatus()
-  }, 5 * 60 * 1000)
+  }, 5 * 1000)
 
   // 每分钟更新最后更新时间显示
   setInterval(() => {

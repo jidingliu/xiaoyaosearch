@@ -60,16 +60,16 @@ async def health_check(db: Session = Depends(get_db)):
             # 转换索引状态格式
             indexes_status = {
                 "faiss_index": {
-                    "status": "ready" if index_info.get('faiss_available') else "not_available",
-                    "document_count": index_info.get('faiss_doc_count', 0),
-                    "index_size": f"{index_info.get('faiss_doc_count', 0) * 150}KB",  # 估算大小
-                    "dimension": index_info.get('faiss_dimension', 'unknown'),
+                    "status": "ready" if index_info.get('chunk_faiss_available') else "not_available",
+                    "document_count": index_info.get('chunk_faiss_doc_count', 0),
+                    "index_size": f"{index_info.get('chunk_faiss_doc_count', 0) * 150}KB",  # 估算大小
+                    "dimension": index_info.get('chunk_faiss_dimension', 'unknown'),
                     "last_updated": datetime.now().isoformat()
                 },
                 "whoosh_index": {
-                    "status": "ready" if index_info.get('whoosh_available') else "not_available",
-                    "document_count": index_info.get('whoosh_doc_count', 0),
-                    "index_size": f"{index_info.get('whoosh_doc_count', 0) * 50}KB",  # 估算大小
+                    "status": "ready" if index_info.get('chunk_whoosh_available') else "not_available",
+                    "document_count": index_info.get('chunk_whoosh_doc_count', 0),
+                    "index_size": f"{index_info.get('chunk_whoosh_doc_count', 0) * 50}KB",  # 估算大小
                     "last_updated": datetime.now().isoformat()
                 }
             }
@@ -160,8 +160,8 @@ async def get_running_status(db: Session = Depends(get_db)):
             search_service = get_chunk_search_service()
             index_info = search_service.get_index_info()
             # 取两个索引的最大文档数量
-            faiss_count = index_info.get('faiss_doc_count', 0)
-            whoosh_count = index_info.get('whoosh_doc_count', 0)
+            faiss_count = index_info.get('chunk_faiss_doc_count', 0)
+            whoosh_count = index_info.get('chunk_whoosh_doc_count', 0)
             index_count = max(faiss_count, whoosh_count)
         except Exception as e:
             logger.warning(f"获取索引状态失败: {str(e)}")
