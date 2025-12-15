@@ -17,19 +17,19 @@ import {
 export class IndexService {
   // 创建索引
   static async createIndex(params: IndexCreateRequest) {
-    const formData = new FormData()
-    formData.append('folder_path', params.folder_path)
-    formData.append('recursive', (params.recursive ?? true).toString())
-
     // 转换文件类型为扩展名列表
+    let fileTypes = params.file_types
     if (params.file_types && params.file_types.length > 0) {
-      const extensions = convertFileTypesToExtensions(params.file_types)
-      extensions.forEach(ext => {
-        formData.append('file_types', ext)
-      })
+      fileTypes = convertFileTypesToExtensions(params.file_types)
     }
 
-    return await httpClient.postFormData('/api/index/create', formData)
+    const requestData = {
+      folder_path: params.folder_path,
+      file_types: fileTypes,
+      recursive: params.recursive ?? true
+    }
+
+    return await httpClient.post('/api/index/create', requestData)
   }
 
   // 查询索引状态
@@ -61,19 +61,19 @@ export class IndexService {
 
   // 更新索引
   static async updateIndex(params: IndexCreateRequest) {
-    const formData = new FormData()
-    formData.append('folder_path', params.folder_path)
-    formData.append('recursive', (params.recursive ?? true).toString())
-
     // 转换文件类型为扩展名列表
+    let fileTypes = params.file_types
     if (params.file_types && params.file_types.length > 0) {
-      const extensions = convertFileTypesToExtensions(params.file_types)
-      extensions.forEach(ext => {
-        formData.append('file_types', ext)
-      })
+      fileTypes = convertFileTypesToExtensions(params.file_types)
     }
 
-    return await httpClient.postFormData('/api/index/update', formData)
+    const requestData = {
+      folder_path: params.folder_path,
+      file_types: fileTypes,
+      recursive: params.recursive ?? true
+    }
+
+    return await httpClient.post('/api/index/update', requestData)
   }
 
   // 备份索引

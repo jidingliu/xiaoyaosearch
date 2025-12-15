@@ -65,6 +65,13 @@
         row-key="index_id"
         @change="handleTableChange"
       >
+        <!-- 文件夹路径列 -->
+        <template #folder_path="{ record }">
+          <a-tooltip :title="record.folder_path" placement="topLeft">
+            <span>{{ record.folder_path }}</span>
+          </a-tooltip>
+        </template>
+
         <!-- 状态列 -->
         <template #status="{ record }">
           <a-tag :color="getStatusColor(record.status)">
@@ -303,7 +310,8 @@ const indexColumns = [
     title: '文件夹路径',
     dataIndex: 'folder_path',
     key: 'folder_path',
-    ellipsis: true
+    ellipsis: true,
+    slots: { customRender: 'folder_path' }
   },
   {
     title: '状态',
