@@ -342,10 +342,13 @@ const indexColumns = [
 
 const pagination = reactive({
   current: 1,
-  pageSize: 10,
-  total: computed(() => indexList.value.length),
+  pageSize: 5,
+  total: 0,
   showSizeChanger: true,
-  showQuickJumper: true
+  showQuickJumper: true,
+  pageSizeOptions: ['5', '10', '20', '50'],
+  showTotal: (total: number, range: [number, number]) =>
+    `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
 })
 
 // 方法
@@ -387,10 +390,14 @@ const loadSystemStatus = async () => {
 const loadIndexList = async () => {
   try {
     loading.value = true
-    const response = await IndexService.getIndexList()
+    // 计算偏移量
+    const offset = (pagination.current - 1) * pagination.pageSize
+    const response = await IndexService.getIndexList(undefined, pagination.pageSize, offset)
     if (response.success) {
       // 适配数据格式：后端返回的是 { indexes: [], total: x }
       indexList.value = response.data.indexes || []
+      // 更新总数
+      pagination.total = response.data.total || 0
     }
   } catch (error) {
     console.error('加载索引列表失败:', error)
@@ -458,8 +465,8 @@ const handleAddFolder = async () => {
       showAddFolderModal.value = false
       message.success('索引任务已创建')
 
-      // 刷新索引列表
-      await loadIndexList()
+      // 刷新系统状态和索引列表
+      await refreshData()
 
       // 重置表单
       newFolder.path = ''
@@ -488,7 +495,7 @@ const smartUpdate = async (record: any) => {
 
     if (response.success) {
       message.success('索引更新任务已创建')
-      await loadIndexList() // 刷新列表
+      await refreshData() // 刷新系统状态和索引列表
     } else {
       message.error(response.message || '更新索引失败')
     }
@@ -504,7 +511,7 @@ const stopIndex = async (record: any) => {
 
     if (response.success) {
       message.success('索引任务已停止')
-      await loadIndexList() // 刷新列表
+      await refreshData() // 刷新系统状态和索引列表
     } else {
       message.error(response.message || '停止索引失败')
     }
@@ -533,7 +540,13 @@ const deleteIndex = async (record: any) => {
 
     if (response.success) {
       message.success('索引已删除')
-      await loadIndexList() // 刷新列表
+      await refreshData() // 刷新系统状态和索引列表
+
+      // 如果删除后当前页没有数据了，返回第一页
+      if (pagination.current > 1 && indexList.value.length === 0) {
+        pagination.current = 1
+        await loadIndexList()
+      }
     } else {
       message.error(response.message || '删除索引失败')
     }
@@ -544,8 +557,13 @@ const deleteIndex = async (record: any) => {
 }
 
 const handleTableChange = async (pag: any) => {
-  pagination.current = pag.current
+  // 检查页面大小是否发生变化
+  const pageSizeChanged = pagination.pageSize !== pag.pageSize
+
+  // 更新分页参数
+  pagination.current = pageSizeChanged ? 1 : pag.current // 如果页面大小改变，重置到第一页
   pagination.pageSize = pag.pageSize
+
   await loadIndexList()
 }
 

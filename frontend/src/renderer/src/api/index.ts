@@ -38,7 +38,7 @@ export class IndexService {
   }
 
   // 索引列表
-  static async getIndexList(status?: string, limit = 10, offset = 0) {
+  static async getIndexList(status?: string, limit = 5, offset = 0) {
     const params = new URLSearchParams()
     if (status && status !== 'all') {
       params.append('status', status)
@@ -106,14 +106,17 @@ export class IndexService {
     // 适配后端数据格式为前端需要的格式
     const { data } = response
     const indexSizeBytes = data.index_stats?.index_size_bytes || 0
+    const databaseStats = data.database_stats || {}
+    const jobStats = data.job_stats || {}
+
     const adaptedData = {
-      totalFiles: data.database_stats?.indexed_files || 0,
+      totalFiles: databaseStats.indexed_files || 0,
       indexSizeBytes, // 保留原始字节数，让前端组件自己格式化
       indexSize: calculateIndexSizeInGB(indexSizeBytes), // 保持兼容性
-      activeTasks: data.job_stats?.processing_jobs || 0,
+      activeTasks: jobStats.processing_jobs || 0,
       successRate: calculateSuccessRate(
-        data.database_stats?.indexed_files || 0,
-        (data.database_stats?.indexed_files || 0) + (data.database_stats?.failed_files || 0)
+        databaseStats.indexed_files || 0,
+        (databaseStats.indexed_files || 0) + (databaseStats.failed_files || 0)
       )
     }
 

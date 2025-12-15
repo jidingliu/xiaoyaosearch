@@ -2,7 +2,7 @@
 API请求数据模型
 定义所有API接口的请求参数结构
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from app.schemas.enums import (
     InputType, SearchType, FileType, JobType,
@@ -41,7 +41,7 @@ class MultimodalRequest(BaseModel):
     limit: int = Field(20, ge=1, le=100, description="返回结果数量")
     threshold: float = Field(0.7, ge=0.0, le=1.0, description="相似度阈值")
 
-    @validator('input_type')
+    @field_validator('input_type')
     def validate_multimodal_input(cls, v):
         """验证多模态输入类型"""
         if v not in [InputType.VOICE, InputType.IMAGE]:
@@ -65,7 +65,7 @@ class IndexCreateRequest(BaseModel):
     )
     recursive: bool = Field(True, description="是否递归搜索子文件夹")
 
-    @validator('folder_path')
+    @field_validator('folder_path')
     def validate_folder_path(cls, v):
         """验证文件夹路径"""
         if not v or not v.strip():
@@ -95,7 +95,7 @@ class AIModelConfigRequest(BaseModel):
     model_name: str = Field(..., min_length=1, max_length=100, description="模型名称")
     config: Dict[str, Any] = Field(..., description="模型配置参数")
 
-    @validator('model_name')
+    @field_validator('model_name')
     def validate_model_name(cls, v):
         """验证模型名称"""
         if not v or not v.strip():
@@ -168,7 +168,7 @@ class CreateSettingRequest(BaseModel):
     description: Optional[str] = Field(default=None, description="设置说明")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "key": "max_search_results",
                 "value": 50,
@@ -183,7 +183,7 @@ class UpdateSettingRequest(BaseModel):
     value: Any = Field(..., description="新的设置值")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "value": 100
             }
@@ -195,7 +195,7 @@ class BatchCreateRequest(BaseModel):
     settings: List[Dict[str, Any]] = Field(..., description="设置数据列表")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "settings": [
                     {
@@ -220,7 +220,7 @@ class ResetRequest(BaseModel):
     default_settings: List[Dict[str, Any]] = Field(..., description="默认设置列表")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "default_settings": [
                     {

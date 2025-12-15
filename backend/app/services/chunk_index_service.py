@@ -1820,6 +1820,99 @@ class ChunkIndexService:
         except Exception as e:
             logger.error(f"更新Faiss元数据chunk_ids失败: {e}")
 
+    def delete_files_by_folder(self, folder_path: str) -> Dict[str, Any]:
+        """删除指定文件夹下的所有文件分块索引
+
+        Args:
+            folder_path: 文件夹路径
+
+        Returns:
+            Dict[str, Any]: 删除结果
+        """
+        try:
+            logger.info(f"开始删除文件夹分块索引: {folder_path}")
+            start_time = time.time()
+
+            # 1. 从数据库查找文件夹下的所有文件和分块记录
+            from app.core.database import SessionLocal
+            from app.models.file import FileModel
+            from app.models.file_chunk import FileChunkModel
+
+            db = SessionLocal()
+            try:
+                # 查找文件夹下的所有文件
+                files = db.query(FileModel).filter(
+                    FileModel.file_path.like(f"{folder_path}%")
+                ).all()
+
+                if not files:
+                    logger.info(f"文件夹下没有找到文件记录: {folder_path}")
+                    return {
+                        'success': True,
+                        'deleted_count': 0,
+                        'folder_path': folder_path,
+                        'message': '文件夹下没有找到文件记录'
+                    }
+
+                # 收集所有文件ID
+                file_ids = [file.id for file in files]
+
+                # 查找所有相关的分块记录
+                chunk_records = db.query(FileChunkModel).filter(
+                    FileChunkModel.file_id.in_(file_ids)
+                ).all()
+
+                logger.info(f"找到 {len(files)} 个文件，{len(chunk_records)} 个分块")
+
+                # 2. 从索引中删除分块
+                faiss_deleted_count = 0
+                whoosh_deleted_count = 0
+
+                if chunk_records:
+                    # 从Faiss索引删除
+                    faiss_deleted_count = self._delete_from_faiss_index(chunk_records)
+
+                    # 从Whoosh索引删除
+                    whoosh_deleted_count = self._delete_from_whoosh_index(chunk_records)
+
+                # 3. 删除数据库中的分块记录
+                for chunk_record in chunk_records:
+                    db.delete(chunk_record)
+                db.commit()
+
+                duration = time.time() - start_time
+
+                logger.info(f"成功删除文件夹分块索引: {folder_path}")
+                logger.info(f"  文件数: {len(files)}")
+                logger.info(f"  分块数: {len(chunk_records)}")
+                logger.info(f"  Faiss删除: {faiss_deleted_count}")
+                logger.info(f"  Whoosh删除: {whoosh_deleted_count}")
+                logger.info(f"  耗时: {duration:.2f}秒")
+
+                return {
+                    'success': True,
+                    'deleted_count': len(chunk_records),
+                    'deleted_files': len(files),
+                    'faiss_deleted_count': faiss_deleted_count,
+                    'whoosh_deleted_count': whoosh_deleted_count,
+                    'folder_path': folder_path,
+                    'duration_seconds': duration
+                }
+
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"删除文件夹分块索引失败 {folder_path}: {e}")
+            import traceback
+            logger.error(f"详细错误信息: {traceback.format_exc()}")
+            return {
+                'success': False,
+                'error': str(e),
+                'folder_path': folder_path,
+                'deleted_count': 0
+            }
+
 
 # 创建全局分块索引服务实例
 _chunk_index_service: Optional[ChunkIndexService] = None

@@ -390,20 +390,51 @@ async def delete_index(
         deleted_files = db.query(FileModel).filter(
             FileModel.file_path.like(f"{folder_path}%")
         ).count()
+
+        # 获取要删除的文件列表，用于清理索引
+        files_to_delete = db.query(FileModel).filter(
+            FileModel.file_path.like(f"{folder_path}%")
+        ).all()
+
         db.query(FileModel).filter(
             FileModel.file_path.like(f"{folder_path}%")
         ).delete()
+
+        # 清理向量索引和全文索引
+        index_service = get_file_index_service()
+        index_deleted = 0
+        chunk_deleted = 0
+
+        try:
+            # 删除文件索引
+            for file_record in files_to_delete:
+                result = index_service.delete_file_from_index(file_record.file_path)
+                if result.get('success', False):
+                    index_deleted += 1
+
+            # 清理分块索引
+            from app.services.chunk_index_service import get_chunk_index_service
+            chunk_service = get_chunk_index_service()
+            chunk_result = chunk_service.delete_files_by_folder(folder_path)
+            chunk_deleted = chunk_result.get('deleted_count', 0)
+
+            logger.info(f"索引清理完成: 文件索引={index_deleted}, 分块索引={chunk_deleted}")
+
+        except Exception as e:
+            logger.warning(f"清理索引时出错: {e}")
 
         # 删除索引任务
         db.delete(index_job)
         db.commit()
 
-        logger.info(f"索引删除完成: id={index_id}, 删除文件数={deleted_files}")
+        logger.info(f"索引删除完成: id={index_id}, 数据库文件数={deleted_files}, 文件索引数={index_deleted}, 分块索引数={chunk_deleted}")
 
         return SuccessResponse(
             data={
                 "deleted_index_id": index_id,
                 "deleted_files_count": deleted_files,
+                "deleted_index_count": index_deleted,
+                "deleted_chunk_count": chunk_deleted,
                 "folder_path": folder_path
             },
             message="索引删除成功"
