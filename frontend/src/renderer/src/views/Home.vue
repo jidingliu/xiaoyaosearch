@@ -165,7 +165,6 @@
                   <a-select value="audio">音频</a-select>
                   <a-select value="video">视频</a-select>
                   <a-select value="image">图片</a-select>
-                  <a-select value="other">其他</a-select>
                 </a-select>
               </a-form-item>
             </a-col>
