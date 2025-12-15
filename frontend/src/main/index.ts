@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -77,6 +77,35 @@ app.whenReady().then(() => {
     } catch (error) {
       console.error('打开文件失败:', error)
       return { success: false, error: error.message }
+    }
+  })
+
+  // 文件夹选择处理
+  ipcMain.handle('select-folder', async (event) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: '选择索引文件夹',
+        properties: ['openDirectory'],
+        buttonLabel: '选择此文件夹'
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, canceled: true }
+      }
+
+      const selectedPath = result.filePaths[0]
+      console.log('用户选择的文件夹:', selectedPath)
+
+      return {
+        success: true,
+        folderPath: selectedPath
+      }
+    } catch (error) {
+      console.error('选择文件夹失败:', error)
+      return {
+        success: false,
+        error: error.message
+      }
     }
   })
 

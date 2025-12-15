@@ -4,7 +4,9 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer
 const api = {
   // 打开文件
-  openFile: (filePath: string) => ipcRenderer.invoke('open-file', filePath)
+  openFile: (filePath: string) => ipcRenderer.invoke('open-file', filePath),
+  // 选择文件夹
+  selectFolder: () => ipcRenderer.invoke('select-folder')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

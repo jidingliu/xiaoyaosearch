@@ -138,15 +138,19 @@ async def search_files(
 
         # 记录LLM查询增强
         if enhanced_query != request.query:
-            ai_models_used.append("qwen2.5:1.5b(LLM增强)")
+            llm_model = await ai_model_service.get_model("llm")
+            llm_model_name = llm_model.model_name if llm_model else "qwen2.5:1.5b"
+            ai_models_used.append(f"{llm_model_name}(LLM增强)")
 
         # 根据搜索类型记录使用的AI模型
         if is_semantic_search(request.search_type) or is_hybrid_search(request.search_type):
-            ai_models_used.append("BGE-M3")
+            embedding_model = await ai_model_service.get_model("embedding")
+            embedding_model_name = embedding_model.model_name if embedding_model else "BGE-M3"
+            ai_models_used.append(embedding_model_name)
 
         # 如果是混合搜索，还有全文搜索
         if is_hybrid_search(request.search_type):
-            ai_models_used.append("Whoosh")
+            ai_models_used.append("Whoosh")  # Whoosh是搜索引擎，不是AI模型
 
         # 保存搜索历史
         input_type_str = get_enum_value(request.input_type)
@@ -228,14 +232,18 @@ async def multimodal_search(
 
         if is_voice_input(input_type):
             # 语音转文字
-            logger.info("使用FasterWhisper进行语音识别")
+            logger.info("使用语音识别模型进行语音识别")
             transcription_result = await ai_model_service.speech_to_text(
                 file_content,
                 language="zh"
             )
             converted_text = transcription_result.get("text", "")
             confidence = transcription_result.get("avg_confidence", 0.0)
-            ai_models_used.append("FasterWhisper")
+
+            # 动态获取语音识别模型名称
+            speech_model = await ai_model_service.get_model("speech")
+            speech_model_name = speech_model.model_name if speech_model else "FasterWhisper"
+            ai_models_used.append(speech_model_name)
 
         elif is_image_input(input_type):
             # 图像特征向量搜索
@@ -263,7 +271,11 @@ async def multimodal_search(
                         search_results = search_result.get('data', {})
                         converted_text = f"图像向量搜索，找到{len(search_results.get('results', []))}个相似图片"
                         confidence = 0.8  # 向量搜索的置信度
-                        ai_models_used.append("CN-CLIP")
+
+                        # 动态获取视觉模型名称
+                        vision_model = await ai_model_service.get_model("vision")
+                        vision_model_name = vision_model.model_name if vision_model else "CN-CLIP"
+                        ai_models_used.append(vision_model_name)
 
                         # 直接返回向量搜索结果，转换为SearchResult格式
                         image_results = []
@@ -400,15 +412,19 @@ async def multimodal_search(
 
                 # 记录LLM查询增强
                 if enhanced_query != converted_text:
-                    ai_models_used.append("qwen2.5:1.5b(LLM增强)")
+                    llm_model = await ai_model_service.get_model("llm")
+                    llm_model_name = llm_model.model_name if llm_model else "qwen2.5:1.5b"
+                    ai_models_used.append(f"{llm_model_name}(LLM增强)")
 
                 # 根据搜索类型记录使用的AI模型
                 if is_semantic_search(search_type) or is_hybrid_search(search_type):
-                    ai_models_used.append("BGE-M3")
+                    embedding_model = await ai_model_service.get_model("embedding")
+                    embedding_model_name = embedding_model.model_name if embedding_model else "BGE-M3"
+                    ai_models_used.append(embedding_model_name)
 
                 # 如果是混合搜索，还有全文搜索
                 if is_hybrid_search(search_type):
-                    ai_models_used.append("Whoosh")
+                    ai_models_used.append("Whoosh")  # Whoosh是搜索引擎，不是AI模型
 
                 logger.info(f"语音搜索完成: 结果数量={len(search_results)}, 搜索类型={get_enum_value(search_type)}")
 
