@@ -431,7 +431,11 @@ class ChunkSearchService:
                     if filters and 'file_types' in filters and filters['file_types']:
                         # 将文件类型映射到枚举值
                         mapped_file_type = self._map_file_type_to_enum(file_type)
-                        if mapped_file_type not in filters['file_types']:
+                        # file_types 是 FileType 枚举列表，需要转换为字符串比较
+                        filter_types = [ft.value if hasattr(ft, 'value') else str(ft) for ft in filters['file_types']]
+                        if mapped_file_type not in filter_types:
+                            file_name = str(hit.get('file_name', ''))
+                            logger.debug(f"文件 {file_name} 被过滤: 原始类型={file_type}, 映射类型={mapped_file_type}, 过滤条件={filter_types}")
                             continue  # 跳过不符合过滤条件的文件
 
                     # 直接从索引获取完整信息
@@ -460,6 +464,7 @@ class ChunkSearchService:
                         chunk_info['highlight'] = self._generate_highlight(content, query_str)
 
                     results.append(chunk_info)
+                    logger.debug(f"添加分块结果: file_id={chunk_info['file_id']}, file_name={chunk_info['file_name']}, score={chunk_info['relevance_score']}")
 
                 return results
 
@@ -502,22 +507,28 @@ class ChunkSearchService:
     def _group_chunks_by_file(self, chunk_results: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """按文件ID分组分块结果"""
         file_groups = {}
+        logger.debug(f"开始分组 {len(chunk_results)} 个分块结果")
         for chunk in chunk_results:
             file_id = chunk.get('file_id')
             if file_id:
                 if file_id not in file_groups:
                     file_groups[file_id] = []
                 file_groups[file_id].append(chunk)
+            else:
+                logger.warning(f"发现没有file_id的分块: {chunk.get('chunk_id', 'unknown')}")
+        logger.debug(f"分组完成: {len(file_groups)} 个文件组")
         return file_groups
 
     def _select_best_chunks(self, file_groups: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """为每个文件选择最佳分块"""
         best_chunks = []
+        logger.debug(f"开始为 {len(file_groups)} 个文件组选择最佳分块")
         for file_id, chunks in file_groups.items():
             if chunks:
                 # 选择相关性最高的分块
                 best_chunk = max(chunks, key=lambda x: x.get('relevance_score', 0))
                 best_chunks.append(best_chunk)
+                logger.debug(f"文件 {file_id} 选择了最佳分块: {best_chunk.get('chunk_id')}, score={best_chunk.get('relevance_score')}")
         return best_chunks
 
     
@@ -798,7 +809,7 @@ class ChunkSearchService:
 
             # 检查向量维度是否匹配
             if query_vector.shape[1] != self.chunk_faiss_index.d:
-                logger.error(f"向量维度不匹配: 查询向量={query_vector.shape[1]}, 索引={self.chunk_faiss_index.d}")
+                logger.error(f"向量维度不匹���: 查询向量={query_vector.shape[1]}, 索引={self.chunk_faiss_index.d}")
                 return self._format_error_response("", SearchType.SEMANTIC, f"向量维度不匹配: {query_vector.shape[1]} != {self.chunk_faiss_index.d}")
 
             # 执行向量搜索
