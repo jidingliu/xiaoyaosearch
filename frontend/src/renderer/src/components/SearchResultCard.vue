@@ -71,30 +71,15 @@
         <FolderOpenOutlined />
         打开
       </a-button>
-        <a-dropdown>
-        <a-button type="text" size="small">
-          <MoreOutlined />
-          更多
-        </a-button>
-        <template #overlay>
-          <a-menu>
-            <a-menu-item @click="copyFilePath">
-              <CopyOutlined />
-              复制路径
-            </a-menu-item>
-            <a-menu-item @click="showFileProperties">
-              <InfoCircleOutlined />
-              文件属性
-            </a-menu-item>
-          </a-menu>
-        </template>
-      </a-dropdown>
+      <a-button type="text" size="small" @click="copyFilePath">
+        <CopyOutlined />
+        复制路径
+      </a-button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import type { SearchResult } from '@/types/api'
 import {
@@ -105,9 +90,7 @@ import {
   FileOutlined,
   FolderOutlined,
   FolderOpenOutlined,
-  MoreOutlined,
   CopyOutlined,
-  InfoCircleOutlined,
   CalendarOutlined,
   HddOutlined,
   TagOutlined
@@ -150,10 +133,6 @@ const copyFilePath = async () => {
   } catch (error) {
     message.error('复制失败，请手动复制')
   }
-}
-
-const showFileProperties = () => {
-  message.info('文件属性功能开发中...')
 }
 
 const formatFileSize = (bytes: number): string => {

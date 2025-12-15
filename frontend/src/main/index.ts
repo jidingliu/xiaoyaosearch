@@ -5,6 +5,8 @@ import icon from '../../resources/icon.png?asset'
 
 function createWindow(): void {
   // Create the browser window.
+  const preloadPath = join(__dirname, '../preload/index.js')
+
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
@@ -12,7 +14,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: preloadPath,
       sandbox: false,
       webSecurity: false, // 禁用Web安全策略，允许跨域请求
       nodeIntegration: false,
@@ -66,6 +68,17 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // 打开文件处理
+  ipcMain.handle('open-file', async (event, filePath: string) => {
+    try {
+      await shell.openPath(filePath)
+      return { success: true }
+    } catch (error) {
+      console.error('打开文件失败:', error)
+      return { success: false, error: error.message }
+    }
+  })
 
   createWindow()
 

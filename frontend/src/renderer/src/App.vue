@@ -71,6 +71,9 @@ const formatFileSize = (bytes: number): string => {
 // 格式化时间
 const formatTime = (date: Date): string => {
   return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit'
   })

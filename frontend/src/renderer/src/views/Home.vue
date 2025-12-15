@@ -500,8 +500,30 @@ const clearImage = () => {
 }
 
 // 搜索结果操作
-const handleOpen = (result: SearchResult) => {
-  message.success(`打开文件: ${result.file_name}`)
+const handleOpen = async (result: SearchResult) => {
+  try {
+    // 优先使用存储的API引用
+    const api = electronAPI || (window as any).api
+
+    if (api && typeof api.openFile === 'function') {
+      const response = await api.openFile(result.file_path)
+
+      if (response.success) {
+        message.success(`已打开文件: ${result.file_name}`)
+      } else {
+        message.error(`打开文件失败: ${response.error}`)
+      }
+    } else {
+      // 备用方案：复制文件路径到剪贴板
+      await navigator.clipboard.writeText(result.file_path)
+      message.info(`文件路径已复制到剪贴板: ${result.file_path}`)
+    }
+  } catch (error) {
+    console.error('打开文件时出错:', error)
+    // 备用方案：复制文件路径到剪贴板
+    await navigator.clipboard.writeText(result.file_path)
+    message.info(`文件路径已复制到剪贴板: ${result.file_path}`)
+  }
 }
 
 
@@ -531,10 +553,13 @@ const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
+// 在组件外部保存 API 引用
+let electronAPI: any = null
+
 // 组件挂载
 onMounted(() => {
-  // 初始化
-  // message.info('欢迎使用小遥搜索 v2.0')
+  // 保存 API 引用
+  electronAPI = (window as any).api
 })
 </script>
 

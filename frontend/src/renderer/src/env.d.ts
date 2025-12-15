@@ -6,3 +6,12 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
+
+interface WindowAPI {
+  openFile: (filePath: string) => Promise<{ success: boolean; error?: string }>
+}
+
+declare interface Window {
+  electron: ElectronAPI
+  api: WindowAPI
+}
