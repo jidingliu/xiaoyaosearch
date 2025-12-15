@@ -222,22 +222,7 @@
           />
         </div>
 
-        <!-- 实时日志 -->
-        <div v-if="selectedIndex.status === 'processing'" class="log-section">
-          <h4>实时日志</h4>
-          <div class="log-container">
-            <div
-              v-for="(log, index) in mockLogs"
-              :key="index"
-              class="log-entry"
-            >
-              <span class="log-time">{{ log.time }}</span>
-              <span class="log-level" :class="log.level">{{ log.level }}</span>
-              <span class="log-message">{{ log.message }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+              </div>
     </a-modal>
   </div>
 </template>
@@ -296,13 +281,6 @@ const newFolder = reactive({
 const indexList = ref([])
 const loading = ref(false)
 
-// Mock日志
-const mockLogs = ref([
-  { time: '14:30:15', level: 'info', message: '开始处理文件: project.pdf' },
-  { time: '14:30:18', level: 'info', message: '文件处理完成: project.pdf (2.3MB)' },
-  { time: '14:30:22', level: 'warn', message: '文件过大，跳过: large_video.mp4 (500MB)' },
-  { time: '14:30:25', level: 'info', message: '开始处理文件: report.docx' }
-])
 
 // 表格配置
 const indexColumns = [
@@ -652,61 +630,6 @@ onMounted(() => {
   color: var(--error);
 }
 
-.log-section {
-  margin-top: var(--space-6);
-}
-
-.log-section h4 {
-  margin-bottom: var(--space-2);
-  color: var(--text-primary);
-}
-
-.log-container {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  height: 200px;
-  overflow-y: auto;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.875rem;
-}
-
-.log-entry {
-  display: flex;
-  gap: var(--space-3);
-  margin-bottom: var(--space-1);
-  align-items: flex-start;
-}
-
-.log-time {
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-.log-level {
-  padding: 2px 6px;
-  border-radius: var(--radius-base);
-  font-size: 0.75rem;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.log-level.info {
-  background: var(--primary-100);
-  color: var(--primary-700);
-}
-
-.log-level.warn {
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--warning);
-}
-
-.log-message {
-  color: var(--text-secondary);
-  flex: 1;
-  word-break: break-word;
-}
 
 /* 响应式设计 */
 @media (max-width: 768px) {
