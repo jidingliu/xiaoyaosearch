@@ -50,9 +50,8 @@
             size="large"
             class="search-input"
             @focus="isSearchFocused = true"
-            @blur="handleSearchBlur"
+            @blur="isSearchFocused = false"
             @press-enter="handleSearch"
-            @input="handleSearchInput"
             :loading="isSearching"
           >
             <template #prefix>
@@ -70,19 +69,7 @@
             </template>
           </a-input>
 
-          <!-- 搜索建议下拉列表 -->
-          <div v-if="showSuggestions && searchSuggestions.length > 0" class="search-suggestions">
-            <div
-              v-for="(suggestion, index) in searchSuggestions"
-              :key="index"
-              class="suggestion-item"
-              @click="selectSuggestion(suggestion)"
-            >
-              <SearchOutlined class="suggestion-icon" />
-              <span class="suggestion-text">{{ suggestion }}</span>
-            </div>
-          </div>
-
+    
           <!-- 语音输入界面 -->
           <div v-if="inputMode === 'voice'" class="voice-input">
             <div class="voice-visualizer">
@@ -267,9 +254,7 @@ import {
   SettingOutlined,
   VideoCameraOutlined,
   EyeOutlined,
-  DeleteOutlined,
-  RobotOutlined,
-  DatabaseOutlined
+  DeleteOutlined
 } from '@ant-design/icons-vue'
 
 // 响应式数据
@@ -280,10 +265,6 @@ const isSearching = ref(false)
 const hasSearched = ref(false)
 const showSearchOptions = ref(false)
 
-// 搜索建议
-const searchSuggestions = ref<string[]>([])
-const showSuggestions = ref(false)
-const suggestionTimer = ref<NodeJS.Timeout>()
 
 // 语音录制
 const isRecording = ref(false)
@@ -370,64 +351,6 @@ const handleSearch = async () => {
   }
 }
 
-// 搜索建议相关
-const handleSearchInput = () => {
-  // 清除之前的定时器
-  if (suggestionTimer.value) {
-    clearTimeout(suggestionTimer.value)
-  }
-
-  // 如果搜索框获得焦点且有内容，显示建议
-  if (isSearchFocused.value && searchQuery.value.trim()) {
-    // 延迟200ms后获取搜索建议
-    suggestionTimer.value = setTimeout(() => {
-      fetchSearchSuggestions()
-    }, 200)
-  } else {
-    showSuggestions.value = false
-    searchSuggestions.value = []
-  }
-}
-
-const handleSearchBlur = () => {
-  // 延迟隐藏建议，让用户有机会点击建议项
-  setTimeout(() => {
-    showSuggestions.value = false
-  }, 200)
-}
-
-const fetchSearchSuggestions = async () => {
-  if (!searchQuery.value.trim()) {
-    showSuggestions.value = false
-    searchSuggestions.value = []
-    return
-  }
-
-  try {
-    const response = await SearchService.getSuggestions(searchQuery.value, 5)
-
-    if (response.success && response.data.suggestions.length > 0) {
-      searchSuggestions.value = response.data.suggestions
-      showSuggestions.value = true
-    } else {
-      showSuggestions.value = false
-      searchSuggestions.value = []
-    }
-  } catch (error) {
-    console.error('获取搜索建议失败:', error)
-    showSuggestions.value = false
-    searchSuggestions.value = []
-  }
-}
-
-const selectSuggestion = (suggestion: string) => {
-  searchQuery.value = suggestion
-  showSuggestions.value = false
-  searchSuggestions.value = []
-
-  // 自动触发搜索
-  handleSearch()
-}
 
 // 存储录音和上传的文件
 const recordedAudioFile = ref<File | null>(null)
@@ -777,49 +700,6 @@ onMounted(() => {
   box-shadow: 0 0 0 3px var(--primary-100);
 }
 
-/* 搜索建议样式 */
-.search-suggestions {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.suggestion-item {
-  display: flex;
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  cursor: pointer;
-  transition: background-color var(--transition-base);
-  border-bottom: 1px solid var(--border-lighter);
-}
-
-.suggestion-item:last-child {
-  border-bottom: none;
-}
-
-.suggestion-item:hover {
-  background-color: var(--surface-01);
-}
-
-.suggestion-icon {
-  color: var(--text-secondary);
-  margin-right: var(--space-2);
-  font-size: 0.875rem;
-}
-
-.suggestion-text {
-  color: var(--text-primary);
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
 
 .voice-input,
 .image-input {
