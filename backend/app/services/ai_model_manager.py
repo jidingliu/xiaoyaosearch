@@ -672,6 +672,134 @@ class AIModelService:
 
         return results
 
+    async def reload_model(self, model_type: str) -> Dict[str, Any]:
+        """
+        热重载指定类型的模型
+
+        Args:
+            model_type: 模型类型 (embedding/speech/vision/llm)
+
+        Returns:
+            Dict[str, Any]: 重载结果
+        """
+        import time
+        start_time = time.time()
+
+        try:
+            logger.info(f"开始热重载模型: {model_type}")
+
+            # 查找当前默认模型
+            current_model_id = self.default_models.get(model_type)
+            if not current_model_id:
+                return {
+                    "success": False,
+                    "message": f"未找到{model_type}类型的默认模型",
+                    "reload_time": 0
+                }
+
+            # 卸载当前模型
+            logger.info(f"卸载当前模型: {current_model_id}")
+            unload_success = await self.unload_model(current_model_id)
+            if not unload_success:
+                return {
+                    "success": False,
+                    "message": f"卸载模型失败: {current_model_id}",
+                    "reload_time": 0
+                }
+
+            # 从数据库重新加载配置
+            await self._load_model_configs_from_db()
+
+            # 查找新的模型配置
+            new_model_id = None
+            new_model_config = None
+
+            for model_id, config in self.model_configs.items():
+                if config.get("model_type") == model_type and config.get("is_active", True):
+                    # 选择最新的配置
+                    if not new_model_config or config.get("id", 0) > new_model_config.get("id", 0):
+                        new_model_id = model_id
+                        new_model_config = config
+
+            if not new_model_id or not new_model_config:
+                return {
+                    "success": False,
+                    "message": f"未找到{model_type}类型的有效配置",
+                    "reload_time": time.time() - start_time
+                }
+
+            # 创建并加载新模型
+            logger.info(f"创建并加载新模型: {new_model_id}")
+            config = new_model_config.get("config", {})
+            if isinstance(config, str):
+                import json
+                config = json.loads(config)
+
+            # 根据模型类型创建新模型实例
+            new_model = None
+            if model_type == "embedding":
+                new_model = create_bge_service(config)
+            elif model_type == "speech":
+                new_model = create_whisper_service(config)
+            elif model_type == "vision":
+                new_model = create_clip_service(config)
+            elif model_type == "llm":
+                new_model = create_ollama_service(config)
+            else:
+                return {
+                    "success": False,
+                    "message": f"不支持的模型类型: {model_type}",
+                    "reload_time": time.time() - start_time
+                }
+
+            # 注册新模型
+            self.model_manager.register_model(new_model_id, new_model)
+
+            # 加载新模型
+            load_success = await self.model_manager.load_model(new_model_id)
+            if not load_success:
+                return {
+                    "success": False,
+                    "message": f"加载新模型失败: {new_model_id}",
+                    "reload_time": time.time() - start_time
+                }
+
+            # 更新默认模型映射
+            self.default_models[model_type] = new_model_id
+
+            reload_time = time.time() - start_time
+            logger.info(f"模型热重载成功: {model_type} -> {new_model_id}, 耗时: {reload_time:.3f}秒")
+
+            return {
+                "success": True,
+                "message": f"{model_type}模型热重载成功",
+                "reload_time": round(reload_time, 3),
+                "old_model_id": current_model_id,
+                "new_model_id": new_model_id
+            }
+
+        except Exception as e:
+            logger.error(f"模型热重载失败: {model_type}, 错误: {str(e)}")
+            return {
+                "success": False,
+                "message": f"模型热重载失败: {str(e)}",
+                "reload_time": time.time() - start_time
+            }
+
+    async def reload_all_models(self) -> Dict[str, Any]:
+        """
+        热重载所有模型
+
+        Returns:
+            Dict[str, Any]: 重载结果
+        """
+        results = {}
+
+        for model_type in ["embedding", "speech", "vision", "llm"]:
+            results[model_type] = await self.reload_model(model_type)
+
+        return results
+
     async def __aenter__(self):
         """异步上下文管理器入口"""
         await self.initialize()

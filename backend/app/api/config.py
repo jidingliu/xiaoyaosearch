@@ -63,11 +63,41 @@ async def update_ai_model_config(
                     logger.warning(f"无法解析现有模型配置JSON: {existing_model.config_json}")
                     existing_config = {}
 
-            # 将前端传入的配置合并到现有配置中，只覆盖传入的字段
-            merged_config = existing_config.copy()
-            for key, value in request.config.items():
-                merged_config[key] = value
-                logger.info(f"更新配置参数: {key} = {value}")
+            # 检查模型名称是否发生变化
+            model_name_changed = existing_model.model_name != request.model_name
+            logger.info(f"模型名称变化检测: {existing_model.model_name} -> {request.model_name}, 变化={model_name_changed}")
+
+            # 如果模型名称变了且不是LLM类型，重新计算model_path
+            if model_name_changed and request.model_type != 'llm':
+                new_model_path = AIModelModel.calculate_model_path(
+                    request.model_type,
+                    request.model_name
+                )
+                logger.info(f"模型名称变化，更新model_path: {new_model_path}")
+
+                # 将新的model_path添加到配置中
+                merged_config = existing_config.copy()
+                merged_config['model_path'] = new_model_path
+
+                # 对于embedding模型，还需要更新model_name配置
+                if request.model_type == 'embedding':
+                    merged_config['model_name'] = request.model_name
+
+                # 对于speech模型，需要更新model_size配置
+                elif request.model_type == 'speech':
+                    merged_config['model_size'] = request.model_name
+
+                # 对于vision模型，需要更新model_name配置
+                elif request.model_type == 'vision':
+                    merged_config['model_name'] = request.model_name
+
+                logger.info(f"已更新模型路径相关配置参数")
+            else:
+                # 模型名称没变或者是LLM类型，正常合并配置
+                merged_config = existing_config.copy()
+                for key, value in request.config.items():
+                    merged_config[key] = value
+                    logger.info(f"更新配置参数: {key} = {value}")
 
             # 更新现有配置
             # 如果前端传了model_name，则更新，否则保持原有
@@ -83,11 +113,30 @@ async def update_ai_model_config(
             logger.info(f"更新现有AI模型配置: id={model_id}, model_type={request.model_type}, final_name={existing_model.model_name}")
         else:
             # 创建新配置
+            # 准备新配置，如果是非LLM类型，需要计算model_path
+            new_config = request.config.copy()
+
+            if request.model_type != 'llm':
+                new_model_path = AIModelModel.calculate_model_path(
+                    request.model_type,
+                    request.model_name
+                )
+                new_config['model_path'] = new_model_path
+                logger.info(f"为新模型计算model_path: {new_model_path}")
+
+                # 对于不同类型模型，添加相应的配置参数
+                if request.model_type == 'embedding':
+                    new_config['model_name'] = request.model_name
+                elif request.model_type == 'speech':
+                    new_config['model_size'] = request.model_name
+                elif request.model_type == 'vision':
+                    new_config['model_name'] = request.model_name
+
             new_model = AIModelModel(
                 model_type=get_enum_value(request.model_type),
                 provider=get_enum_value(request.provider),
                 model_name=request.model_name,
-                config_json=json.dumps(request.config, ensure_ascii=False)
+                config_json=json.dumps(new_config, ensure_ascii=False)
             )
             db.add(new_model)
             db.commit()
@@ -95,14 +144,19 @@ async def update_ai_model_config(
             model_id = new_model.id
             logger.info(f"创建新AI模型配置: id={model_id}")
 
+        # 构建响应数据
+        response_data = {
+            "model_id": model_id,
+            "model_type": get_enum_value(request.model_type),
+            "provider": get_enum_value(request.provider),
+            "model_name": request.model_name
+        }
+
+        message = "AI模型配置更新成功，重启应用后生效"
+
         return SuccessResponse(
-            data={
-                "model_id": model_id,
-                "model_type": get_enum_value(request.model_type),
-                "provider": get_enum_value(request.provider),
-                "model_name": request.model_name
-            },
-            message="AI模型配置更新成功"
+            data=response_data,
+            message=message
         )
 
     except ValidationException:

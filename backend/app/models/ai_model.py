@@ -158,6 +158,31 @@ class AIModelModel(Base):
             print(f"记录CUDA信息时发生错误: {str(e)}")
 
     @classmethod
+    def calculate_model_path(cls, model_type: str, model_name: str) -> str:
+        """
+        根据模型类型和名称计算模型路径
+
+        Args:
+            model_type: 模型类型 (embedding/speech/vision)
+            model_name: 模型名称
+
+        Returns:
+            str: 模型路径
+        """
+        project_root = cls.get_project_root()
+
+        path_mapping = {
+            "embedding": f"data/models/embedding/{model_name}",
+            "speech": f"data/models/faster-whisper/{model_name}",
+            "vision": f"data/models/cn-clip/{model_name}"
+        }
+
+        model_path = path_mapping.get(model_type, "")
+        if model_path:
+            return str(project_root / model_path)
+        return ""
+
+    @classmethod
     def get_default_configs(cls) -> dict:
         """
         获取默认模型配置（基于数据库当前配置）

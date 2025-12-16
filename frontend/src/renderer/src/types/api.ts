@@ -51,10 +51,38 @@ export interface IndexCreateRequest {
 
 // AI模型配置请求
 export interface AIModelConfigRequest {
-  model_type: string;
-  provider: string;
+  model_type: 'embedding' | 'speech' | 'vision' | 'llm';
+  provider: 'local' | 'cloud';
   model_name: string;
   config: Record<string, any>;
+}
+
+// AI模型测试请求
+export interface AIModelTestRequest {
+  test_data?: string;
+  config_override?: Record<string, any>;
+}
+
+// AI模型信息
+export interface AIModelInfo {
+  id: number;
+  model_type: 'embedding' | 'speech' | 'vision' | 'llm';
+  provider: 'local' | 'cloud';
+  model_name: string;
+  config_json: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// AI模型测试结果
+export interface AIModelTestResult {
+  model_id: number;
+  test_passed: boolean;
+  response_time: number;
+  test_message: string;
+  test_data?: string;
+  config_used: Record<string, any>;
 }
 
 // 搜索结果
