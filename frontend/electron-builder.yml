@@ -1,7 +1,8 @@
-appId: com.electron.app
-productName: electron-app
+appId: com.xiaoyaosearch.app
+productName: 小遥搜索
 directories:
   buildResources: build
+  output: dist-electron
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -12,12 +13,19 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: electron-app
+  executableName: xiaoyaosearch-frontend
+  target:
+    - target: nsis
+      arch:
+        - x64
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  oneClick: false
+  allowToChangeInstallationDirectory: true
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
@@ -40,6 +48,6 @@ appImage:
 npmRebuild: false
 publish:
   provider: generic
-  url: https://example.com/auto-updates
+  url: https://www.dtsola.com/xiaoyaosearch/releases
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

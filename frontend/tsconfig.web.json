@@ -16,6 +16,15 @@
       "@renderer/*": [
         "src/renderer/src/*"
       ]
-    }
+    },
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false,
+    "noImplicitThis": false
   }
 }

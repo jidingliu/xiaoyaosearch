@@ -333,7 +333,7 @@ const handleSearch = async () => {
       search_type: searchOptions.searchType,
       threshold: searchOptions.threshold,
       file_types: searchOptions.fileTypes,
-      limit: 100
+      limit: 50
     })
 
     if (response.success) {
@@ -396,7 +396,7 @@ const analyzeImage = async () => {
       InputType.IMAGE,
       uploadedImageFile.value,
       searchOptions.searchType,
-      20,
+      50,
       searchOptions.threshold,
       searchOptions.fileTypes
     )

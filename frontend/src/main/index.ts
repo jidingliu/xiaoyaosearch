@@ -18,8 +18,7 @@ function createWindow(): void {
       sandbox: false,
       webSecurity: false, // 禁用Web安全策略，允许跨域请求
       nodeIntegration: false,
-      contextIsolation: true,
-      enableRemoteModule: false
+      contextIsolation: true
     }
   })
 
@@ -70,18 +69,19 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong'))
 
   // 打开文件处理
-  ipcMain.handle('open-file', async (event, filePath: string) => {
+  ipcMain.handle('open-file', async (_event, filePath: string) => {
     try {
       await shell.openPath(filePath)
       return { success: true }
     } catch (error) {
       console.error('打开文件失败:', error)
-      return { success: false, error: error.message }
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return { success: false, error: errorMessage }
     }
   })
 
   // 文件夹选择处理
-  ipcMain.handle('select-folder', async (event) => {
+  ipcMain.handle('select-folder', async (_event) => {
     try {
       const result = await dialog.showOpenDialog({
         title: '选择索引文件夹',
@@ -102,9 +102,10 @@ app.whenReady().then(() => {
       }
     } catch (error) {
       console.error('选择文件夹失败:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
       return {
         success: false,
-        error: error.message
+        error: errorMessage
       }
     }
   })
