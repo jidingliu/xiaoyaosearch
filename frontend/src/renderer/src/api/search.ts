@@ -22,8 +22,8 @@ export class SearchService {
     inputType: InputType.VOICE | InputType.IMAGE,
     file: File,
     searchType: SearchType = SearchType.HYBRID,
-    limit: number = 20,
-    threshold: number = 0.7,
+    limit: number = 100,
+    threshold: number = 0.5,
     fileTypes?: FileType[]
   ): Promise<MultimodalResponse> {
     const formData = new FormData()
@@ -43,7 +43,7 @@ export class SearchService {
   }
 
   // 获取搜索历史
-  static async getHistory(limit = 20, offset = 0): Promise<{ success: boolean; data: { history: SearchHistory[]; total: number } }> {
+  static async getHistory(limit = 100, offset = 0): Promise<{ success: boolean; data: { history: SearchHistory[]; total: number } }> {
     return await httpClient.get<{ success: boolean; data: { history: SearchHistory[]; total: number } }>(`/api/search/history?limit=${limit}&offset=${offset}`)
   }
 

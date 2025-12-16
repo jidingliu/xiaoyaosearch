@@ -333,7 +333,7 @@ const handleSearch = async () => {
       search_type: searchOptions.searchType,
       threshold: searchOptions.threshold,
       file_types: searchOptions.fileTypes,
-      limit: 20
+      limit: 100
     })
 
     if (response.success) {
@@ -539,7 +539,7 @@ const processVoiceSearch = async (audioFile: File) => {
       InputType.VOICE,
       audioFile,
       searchOptions.searchType,
-      20,
+      100,
       searchOptions.threshold,
       searchOptions.fileTypes
     )
