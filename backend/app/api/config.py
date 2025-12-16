@@ -33,7 +33,7 @@ async def update_ai_model_config(
     - **model_type**: 模型类型 (embedding/speech/vision/llm)
     - **provider**: 提供商类型 (local/cloud)
     - **model_name**: 模型名称
-    - **config**: 模型配置参数
+    - **config**: 模型配置参数（支持部分更新）
     """
     logger.info(f"更新AI模型配置: type={request.model_type}, provider={request.provider}, name={request.model_name}")
 
@@ -54,14 +54,33 @@ async def update_ai_model_config(
             logger.info("未找到现有模型，将创建新的")
 
         if existing_model:
-            # 更新现有配置（包括model_name和provider）
-            existing_model.model_name = request.model_name
+            # 合并现有配置和新配置 - 只更新前端传入的参数
+            existing_config = {}
+            if existing_model.config_json:
+                try:
+                    existing_config = json.loads(existing_model.config_json)
+                except json.JSONDecodeError:
+                    logger.warning(f"无法解析现有模型配置JSON: {existing_model.config_json}")
+                    existing_config = {}
+
+            # 将前端传入的配置合并到现有配置中，只覆盖传入的字段
+            merged_config = existing_config.copy()
+            for key, value in request.config.items():
+                merged_config[key] = value
+                logger.info(f"更新配置参数: {key} = {value}")
+
+            # 更新现有配置
+            # 如果前端传了model_name，则更新，否则保持原有
+            if request.model_name and request.model_name != get_enum_value(request.model_type):
+                existing_model.model_name = request.model_name
+                logger.info(f"更新模型名称: {existing_model.model_name} -> {request.model_name}")
+
             existing_model.provider = get_enum_value(request.provider)
-            existing_model.config_json = json.dumps(request.config, ensure_ascii=False)
+            existing_model.config_json = json.dumps(merged_config, ensure_ascii=False)
             existing_model.updated_at = datetime.utcnow()
             db.commit()
             model_id = existing_model.id
-            logger.info(f"更新现有AI模型配置: id={model_id}, model_type={request.model_type}, new_name={request.model_name}")
+            logger.info(f"更新现有AI模型配置: id={model_id}, model_type={request.model_type}, final_name={existing_model.model_name}")
         else:
             # 创建新配置
             new_model = AIModelModel(

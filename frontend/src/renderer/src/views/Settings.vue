@@ -22,10 +22,10 @@
 
             <a-form-item label="模型版本">
               <a-select v-model:value="speechSettings.modelSize" style="width: 100%">
-                <a-select-option value="Systran/faster-whisper-base">Base (快速)</a-select-option>
-                <a-select-option value="Systran/faster-whisper-small">Small (平衡)</a-select-option>
-                <a-select-option value="Systran/faster-whisper-medium">Medium (精确)</a-select-option>
-                <a-select-option value="Systran/faster-whisper-large">Large (高精度)</a-select-option>
+                <a-select-option value="base">Base (快速)</a-select-option>
+                <a-select-option value="small">Small (平衡)</a-select-option>
+                <a-select-option value="medium">Medium (精确)</a-select-option>
+                <a-select-option value="large">Large (高精度)</a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item label="运行设备">
@@ -95,8 +95,8 @@
 
             <a-form-item label="模型版本">
               <a-select v-model:value="visionSettings.clipModel" style="width: 100%">
-                <a-select-option value="OFA-Sys/chinese-clip-vit-base-patch16">ViT-Base (快速)</a-select-option>
-                <a-select-option value="OFA-Sys/chinese-clip-vit-large-patch16">ViT-Large (高精度)</a-select-option>
+                <a-select-option value="base">ViT-Base (快速)</a-select-option>
+                <a-select-option value="large">ViT-Large (高精度)</a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item label="运行设备">
@@ -131,9 +131,9 @@
 
             <a-form-item label="模型版本">
               <a-select v-model:value="embeddingSettings.modelName" style="width: 100%">
-                <a-select-option value="BAAI/bge-m3">BGE-M3 (多语言)</a-select-option>
-                <a-select-option value="BAAI/bge-small-zh">BGE-Small-zh (中文)</a-select-option>
-                <a-select-option value="BAAI/bge-large-zh">BGE-Large-zh (中文)</a-select-option>
+                <a-select-option value="bge-m3">BGE-M3 (多语言)</a-select-option>
+                <a-select-option value="bge-small-zh">BGE-Small-zh (中文)</a-select-option>
+                <a-select-option value="bge-large-zh">BGE-Large-zh (中文)</a-select-option>
               </a-select>
             </a-form-item>
             <a-form-item label="运行设备">

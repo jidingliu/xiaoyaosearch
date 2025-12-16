@@ -126,16 +126,42 @@ class WhisperTranscriptionService(BaseAIModel):
         device = self.device
         compute_type = self.config["compute_type"]
 
-        logger.info(f"下载并加载Whisper模型 {model_size} 到 {device} (计算类型: {compute_type})")
+        # 强制使用本地模型路径
+        model_path = self.config.get("model_path")
+
+        if model_path:
+            # 检查本地路径是否存在
+            if os.path.exists(model_path):
+                logger.info(f"使用本地Whisper模型路径: {model_path}")
+                model_identifier = model_path
+            else:
+                error_msg = f"本地模型路径不存在: {model_path}，请确保模型文件已下载到指定位置"
+                logger.error(error_msg)
+                raise AIModelException(error_msg, model_name=self.model_name)
+        else:
+            # 如果没有配置model_path，尝试使用model_size作为路径（可能是完整路径）
+            if os.path.exists(model_size):
+                logger.info(f"使用model_size作为本地模型路径: {model_size}")
+                model_identifier = model_size
+            else:
+                error_msg = f"未配置model_path且model_size不是有效的本地路径: {model_size}，请配置有效的本地模型路径"
+                logger.error(error_msg)
+                raise AIModelException(error_msg, model_name=self.model_name)
+
+        logger.info(f"加载本地Whisper模型 {model_identifier} 到 {device} (计算类型: {compute_type})")
 
         # 创建Whisper模型实例
-        self.model = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type
-        )
-
-        logger.info("Whisper模型加载完成")
+        try:
+            self.model = WhisperModel(
+                model_identifier,
+                device=device,
+                compute_type=compute_type
+            )
+            logger.info("Whisper模型加载完成")
+        except Exception as e:
+            error_msg = f"加载本地Whisper模型失败: {str(e)}，请检查模型文件是否完整"
+            logger.error(error_msg)
+            raise AIModelException(error_msg, model_name=self.model_name)
 
     async def unload_model(self) -> bool:
         """

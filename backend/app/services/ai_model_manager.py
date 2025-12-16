@@ -111,25 +111,39 @@ class AIModelService:
                 "provider": "local",
                 "model_name": "BAAI/bge-m3",
                 "config": {
-                    "model_name": str(project_root / "data" / "models" / "embedding" / "BAAI" / "bge-m3"),
+                    "model_name": "BAAI/bge-m3",
                     "device": get_settings().ai.get_optimal_device(),
                     "embedding_dim": 1024,
                     "max_length": 8192,
                     "normalize_embeddings": True,
-                    "cache_dir": str(project_root / "data" / "models" / "embedding" / "BAAI" / "bge-m3"),
-                    "use_sentence_transformers": False,  # 使用本地Transformers而不是SentenceTransformers
-                    "trust_remote_code": True
+                    "batch_size": 32,
+                    "pooling_strategy": "cls",
+                    "use_sentence_transformers": False,
+                    "cache_dir": None,
+                    "trust_remote_code": True,
+                    "model_path": str(project_root / "data" / "models" / "embedding" / "BAAI" / "bge-m3")
                 }
             },
             "whisper_local": {
                 "model_type": "speech",
                 "provider": "local",
-                "model_name": str(project_root / "data" / "models" / "faster-whisper" / "Systran" / "faster-whisper-base"),
+                "model_name": "Systran/faster-whisper-base",
                 "config": {
-                    "model_size": "base",
+                    "model_size": "Systran/faster-whisper-base",
+                    "compute_type": "float16",
                     "device": get_settings().ai.get_optimal_device(),
                     "language": "zh",
-                    "max_duration": 30
+                    "task": "transcribe",
+                    "max_file_size": 52428800,
+                    "max_duration": 30,
+                    "supported_formats": [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"],
+                    "beam_size": 5,
+                    "best_of": 5,
+                    "temperature": 0.0,
+                    "compression_ratio_threshold": 2.4,
+                    "log_prob_threshold": -1.0,
+                    "no_speech_threshold": 0.6,
+                    "model_path": str(project_root / "data" / "models" / "faster-whisper" / "Systran" / "faster-whisper-base")
                 }
             },
             "clip_local": {
@@ -137,9 +151,15 @@ class AIModelService:
                 "provider": "local",
                 "model_name": "OFA-Sys/chinese-clip-vit-base-patch16",
                 "config": {
-                    "model_name": str(project_root / "data" / "models" / "cn-clip" / "OFA-Sys" / "chinese-clip-vit-base-patch16"),
+                    "model_name": "OFA-Sys/chinese-clip-vit-base-patch16",
                     "device": get_settings().ai.get_optimal_device(),
-                    "max_image_size": 512
+                    "max_image_size": 512,
+                    "supported_formats": [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"],
+                    "max_file_size": 10485760,
+                    "normalize_embeddings": True,
+                    "batch_size": 16,
+                    "use_chinese_clip": True,
+                    "model_path": str(project_root / "data" / "models" / "cn-clip" / "OFA-Sys" / "chinese-clip-vit-base-patch16")
                 }
             },
             "ollama_local": {
@@ -149,7 +169,30 @@ class AIModelService:
                 "config": {
                     "model_name": "qwen2.5:1.5b",
                     "base_url": "http://localhost:11434",
-                    "temperature": 0.7
+                    "timeout": 30,
+                    "temperature": 0.7,
+                    "top_p": 0.9,
+                    "top_k": 40,
+                    "repeat_penalty": 1.1,
+                    "num_predict": 2048,
+                    "num_ctx": 2048,
+                    "seed": None,
+                    "use_cloud_fallback": True,
+                    "cloud_provider": "aliyun",
+                    "cloud_config": {
+                        "aliyun": {
+                            "model": "qwen-turbo",
+                            "api_key": None,
+                            "api_secret": None,
+                            "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+                        },
+                        "openai": {
+                            "model": "gpt-3.5-turbo",
+                            "api_key": None,
+                            "endpoint": "https://api.openai.com/v1"
+                        }
+                    },
+                    "device": get_settings().ai.get_optimal_device()
                 }
             }
         }

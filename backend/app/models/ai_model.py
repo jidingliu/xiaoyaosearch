@@ -2,6 +2,8 @@
 AI模型配置数据模型
 定义AI模型配置的数据库表结构
 """
+import os
+from pathlib import Path
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -98,6 +100,38 @@ class AIModelModel(Base):
             return "cpu"
 
     @classmethod
+    def get_project_root(cls) -> Path:
+        """
+        获取项目根目录路径
+
+        Returns:
+            Path: 项目根目录路径
+        """
+        # 从当前文件路径向上查找，找到包含 .git 目录或 setup.py 的根目录
+        current_path = Path(__file__).resolve()
+
+        # 从 app/models/ai_model.py 向上查找项目根目录
+        # 当前路径: .../xiaoyaosearch/backend/app/models/ai_model.py
+        # 需要找到: .../xiaoyaosearch/
+        project_root = current_path.parent.parent.parent  # 回退3级目录
+
+        # 验证是否是正确的项目根目录（检查是否包含 data 目录）
+        if not project_root.joinpath("data").exists():
+            # 如果没有找到，尝试其他方法
+            # 查找包含 .git 目录的父目录
+            search_path = current_path
+            while search_path.parent != search_path:  # 避免到达根目录
+                if search_path.joinpath(".git").exists():
+                    project_root = search_path
+                    break
+                search_path = search_path.parent
+            else:
+                # 如果还是没找到，使用默认的计算方式
+                project_root = current_path.parent.parent.parent
+
+        return project_root
+
+    @classmethod
     def _log_cuda_info(cls, device_name: str, device_count: int):
         """
         记录CUDA设备信息
@@ -126,7 +160,7 @@ class AIModelModel(Base):
     @classmethod
     def get_default_configs(cls) -> dict:
         """
-        获取默认模型配置
+        获取默认模型配置（基于数据库当前配置）
 
         Returns:
             dict: 默认配置字典
@@ -134,17 +168,26 @@ class AIModelModel(Base):
         # 检测是否有CUDA可用
         device = cls._get_optimal_device()
 
+        # 获取项目根目录
+        project_root = cls.get_project_root()
+
         return {
             "bge_m3_local": {
                 "model_type": "embedding",
                 "provider": "local",
                 "model_name": "BAAI/bge-m3",
                 "config": {
-                    "model_path": "embedding/BAAI/bge-m3",
+                    "model_name": "BAAI/bge-m3",
                     "device": device,
                     "embedding_dim": 1024,
                     "max_length": 8192,
-                    "normalize_embeddings": True
+                    "normalize_embeddings": True,
+                    "batch_size": 32,
+                    "pooling_strategy": "cls",
+                    "use_sentence_transformers": False,
+                    "cache_dir": None,
+                    "trust_remote_code": True,
+                    "model_path": str(project_root / "data/models/embedding/BAAI/bge-m3")
                 }
             },
             "faster_whisper_local": {
@@ -152,11 +195,21 @@ class AIModelModel(Base):
                 "provider": "local",
                 "model_name": "Systran/faster-whisper-base",
                 "config": {
-                    "model_path": "faster-whisper/Systran/faster-whisper-base",
                     "model_size": "Systran/faster-whisper-base",
-                    "compute_type": "auto",
+                    "compute_type": "float16",
                     "device": device,
-                    "language": "zh"
+                    "language": "zh",
+                    "task": "transcribe",
+                    "max_file_size": 52428800,
+                    "max_duration": 30,
+                    "supported_formats": [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"],
+                    "beam_size": 5,
+                    "best_of": 5,
+                    "temperature": 0.0,
+                    "compression_ratio_threshold": 2.4,
+                    "log_prob_threshold": -1.0,
+                    "no_speech_threshold": 0.6,
+                    "model_path": str(project_root / "data/models/faster-whisper/Systran/faster-whisper-base")
                 }
             },
             "cn_clip_local": {
@@ -164,8 +217,15 @@ class AIModelModel(Base):
                 "provider": "local",
                 "model_name": "OFA-Sys/chinese-clip-vit-base-patch16",
                 "config": {
-                    "model_path": "cn-clip/OFA-Sys/chinese-clip-vit-base-patch16",
-                    "device": device
+                    "model_name": "OFA-Sys/chinese-clip-vit-base-patch16",
+                    "device": device,
+                    "max_image_size": 512,
+                    "supported_formats": [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"],
+                    "max_file_size": 10485760,
+                    "normalize_embeddings": True,
+                    "batch_size": 16,
+                    "use_chinese_clip": True,
+                    "model_path": str(project_root / "data/models/cn-clip/OFA-Sys/chinese-clip-vit-base-patch16")
                 }
             },
             "ollama_local": {
@@ -173,11 +233,32 @@ class AIModelModel(Base):
                 "provider": "local",
                 "model_name": "qwen2.5:1.5b",
                 "config": {
+                    "model_name": "qwen2.5:1.5b",
                     "base_url": "http://localhost:11434",
-                    "model": "qwen2.5:1.5b",
+                    "timeout": 30,
                     "temperature": 0.7,
-                    "max_tokens": 2000,
-                    "timeout": 30
+                    "top_p": 0.9,
+                    "top_k": 40,
+                    "repeat_penalty": 1.1,
+                    "num_predict": 2048,
+                    "num_ctx": 2048,
+                    "seed": None,
+                    "use_cloud_fallback": True,
+                    "cloud_provider": "aliyun",
+                    "cloud_config": {
+                        "aliyun": {
+                            "model": "qwen-turbo",
+                            "api_key": None,
+                            "api_secret": None,
+                            "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+                        },
+                        "openai": {
+                            "model": "gpt-3.5-turbo",
+                            "api_key": None,
+                            "endpoint": "https://api.openai.com/v1"
+                        }
+                    },
+                    "device": device
                 }
             }
         }

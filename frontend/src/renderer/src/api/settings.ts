@@ -80,12 +80,30 @@ export class SettingsService {
     try {
       const enumType = this.mapFrontendTypeToEnum(modelType)
 
+      // 根据模型类型映射前端参数到后端参数
+      const mappedConfig = this.mapConfigParameters(modelType, config)
+
       // 构建完整的配置请求
+      // 对于有 model_name 配置的模型类型，优先使用配置中的 model_name
+      let modelName = this.getDefaultModelName(modelType)
+      if (mappedConfig.model_name) {
+        modelName = mappedConfig.model_name
+      } else if (modelType === 'whisper' && mappedConfig.model_size) {
+        // 对于 whisper，根据 model_size 确定 model_name
+        const modelNameMap: Record<string, string> = {
+          'base': 'Systran/faster-whisper-base',
+          'small': 'Systran/faster-whisper-small',
+          'medium': 'Systran/faster-whisper-medium',
+          'large': 'Systran/faster-whisper-large'
+        }
+        modelName = modelNameMap[mappedConfig.model_size] || modelName
+      }
+
       const request = {
         model_type: enumType,
-        model_name: config.model_name || this.getDefaultModelName(modelType),
+        model_name: modelName,
         provider: 'local',
-        config: config
+        config: mappedConfig
       }
 
       const response = await this.client.post('/api/config/ai-model', request)
@@ -259,7 +277,7 @@ export class SettingsService {
         available_models: [
           {
             model_type: 'embedding',
-            models: ['BAAI/bge-m3', 'BAAI/bge-small-zh-v1.5', 'BAAI/bge-large-zh-v1.5']
+            models: ['BAAI/bge-m3', 'BAAI/bge-small-zh', 'BAAI/bge-large-zh']
           },
           {
             model_type: 'speech',
@@ -291,6 +309,66 @@ export class SettingsService {
       bge: 'embedding'
     }
     return mapping[frontendType] || frontendType
+  }
+
+  /**
+   * 前端配置参数映射到后端配置参数
+   */
+  private static mapConfigParameters(modelType: string, config: any): any {
+    const mappedConfig = { ...config }
+
+    // 根据模型类型映射特殊参数
+    switch (modelType) {
+      case 'whisper':
+        // 语音识别模型：根据 model_size 设置 model_path
+        if (config.model_size) {
+          const modelPathMap: Record<string, string> = {
+            'base': 'faster-whisper/Systran/faster-whisper-base',
+            'small': 'faster-whisper/Systran/faster-whisper-small',
+            'medium': 'faster-whisper/Systran/faster-whisper-medium',
+            'large': 'faster-whisper/Systran/faster-whisper-large'
+          }
+          mappedConfig.model_path = modelPathMap[config.model_size] || modelPathMap['base']
+        }
+        break
+
+      case 'ollama':
+        // 大语言模型：映射参数
+        if (config.local_model) {
+          mappedConfig.model = config.local_model
+          delete mappedConfig.local_model
+        }
+        if (config.ollama_url) {
+          mappedConfig.base_url = config.ollama_url
+          delete mappedConfig.ollama_url
+        }
+        break
+
+      case 'clip':
+        // 视觉模型：根据 model_name 设置 model_path
+        if (config.model_name) {
+          const modelPathMap: Record<string, string> = {
+            'base': 'cn-clip/OFA-Sys/chinese-clip-vit-base-patch16',
+            'large': 'cn-clip/OFA-Sys/chinese-clip-vit-large-patch16'
+          }
+          mappedConfig.model_path = modelPathMap[config.model_name] || modelPathMap['OFA-Sys/chinese-clip-vit-base-patch16']
+        }
+        break
+
+      case 'bge':
+        // 文本嵌入模型：根据 model_name 设置 model_path
+        if (config.model_name) {
+          const modelPathMap: Record<string, string> = {
+            'bge-m3': 'embedding/BAAI/bge-m3',
+            'bge-small-zh': 'embedding/BAAI/bge-small-zh-v1.5',
+            'bge-large-zh': 'embedding/BAAI/bge-large-zh-v1.5'
+          }
+          mappedConfig.model_path = modelPathMap[config.model_name] || modelPathMap['BAAI/bge-m3']
+        }
+        break
+    }
+
+    return mappedConfig
   }
 
   /**
