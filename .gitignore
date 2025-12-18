@@ -18,7 +18,9 @@ data/test-data/
 data/uploads/
 
 # AI模型文件（体积大）
-data/models/
+data/models/cn-clip
+data/models/embedding
+data/models/faster-whisper
 
 
 # 日志文件
