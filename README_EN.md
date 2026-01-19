@@ -11,7 +11,7 @@ English | [简体中文](README.md)
 XiaoyaoSearch is a cross-platform local desktop application (Windows/MacOS/Linux) designed for knowledge workers, content creators, and technical developers. Through integrated AI models, it supports multiple input methods including voice input (within 30 seconds), text input, and image input, converting user queries into semantic meaning for intelligent search and deep retrieval of local files.
 
 ## ⭐️ Important Notes
-- This project is completely free for personal use but cannot be modified and redistributed; commercial use requires authorization. See [XiaoyaoSearch Software License Agreement](LICENSE_EN) for details
+- This project is completely free for non-commercial use, allowing modification and distribution (subject to preserving copyright notices and agreement); commercial use requires authorization. See [XiaoyaoSearch Software License Agreement](LICENSE_EN) for details
 - This project is entirely implemented through Vibe Coding, providing all source code and development documentation (context) for everyone to learn and exchange
   ![Development Documentation](docs/产品文档/应用截图/开发文档.png)
 
