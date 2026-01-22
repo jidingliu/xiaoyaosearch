@@ -244,3 +244,7 @@ npm run dev
 
 ## Product Roadmap
 [Product Roadmap](ROADMAP_EN.md)
+
+## Project Contributors
+Thanks to the following people for their contributions to this project:
+- [@jidingliu](https://github.com/jidingliu) - Code submission and project promotion
