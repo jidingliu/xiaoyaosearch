@@ -245,6 +245,6 @@ npm run dev
 ## 产品路线图
 [产品路线图](ROADMAP.md)
 
-## Contributors
+## 项目贡献者
 感谢以下人员为本项目做出的贡献：
-- [@jidingliu](https://github.com/jidingliu) - 提交代码
+- [@jidingliu](https://github.com/jidingliu) - 提交代码及项目宣传
